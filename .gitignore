@@ -8,4 +8,5 @@ dist/
 coverage/
 .turbo/
 prisma/*.db
-prisma/migrations/
+.shopify/
+*.log

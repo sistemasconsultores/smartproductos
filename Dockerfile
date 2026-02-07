@@ -21,9 +21,12 @@ RUN apk add --no-cache curl
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
+COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/worker ./worker
+COPY --from=builder /app/app ./app
+COPY --from=builder /app/config ./config
 RUN addgroup -g 1001 -S nodejs && adduser -S smartenrich -u 1001 -G nodejs
 USER smartenrich
 EXPOSE 3100
