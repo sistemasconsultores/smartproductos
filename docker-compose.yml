@@ -3,7 +3,7 @@ version: "3.8"
 services:
   app:
     image: smartenrich:latest
-    command: ["npm", "run", "start"]
+    command: ["npm", "run", "docker-start"]
     env_file: .env
     ports:
       - "3100:3100"
