@@ -50,7 +50,7 @@ services:
     volumes:
       - smartenrich-data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3100/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3100/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -73,7 +73,13 @@ services:
       MINIO_SECRET_KEY: "${MINIO_SECRET_KEY}"
       MINIO_BUCKET: "smartenrich-images"
       NODE_ENV: "production"
+      SHOPIFY_API_KEY: "${SHOPIFY_API_KEY}"
+      SHOPIFY_API_SECRET: "${SHOPIFY_API_SECRET}"
+      SHOPIFY_APP_URL: "https://smartenrich.automasc.com"
+      SCOPES: "read_products,write_products,read_product_listings,read_inventory"
       WORKER_CONCURRENCY: "3"
+      CRON_ENABLED: "true"
+      CRON_SCHEDULE: "0 2 * * *"
       MAX_PRODUCTS_PER_RUN: "50"
     networks:
       - smartenrich
