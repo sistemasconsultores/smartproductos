@@ -1,5 +1,6 @@
 import { Worker, Job } from "bullmq";
 import { PrismaClient } from "@prisma/client";
+import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import { getRedis } from "../redis.server";
 import type { EnrichmentJobData } from "./enrichment.queue.server";
 
@@ -41,8 +42,7 @@ export function createEnrichmentWorker(
         "./worker-admin.server"
       );
       // Cast to expected type - worker admin context provides the same graphql interface
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const admin = createAdminApiContext(shop, session.accessToken) as any;
+      const admin = createAdminApiContext(shop, session.accessToken) as unknown as AdminApiContext;
 
       const { runEnrichmentPipeline } = await import(
         "../enrichment/pipeline.server"
