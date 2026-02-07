@@ -1,6 +1,7 @@
 {
   "name": "smartenrich",
   "private": true,
+  "type": "module",
   "version": "1.0.0",
   "description": "SmartEnrich - Shopify product enrichment app with AI",
   "scripts": {
