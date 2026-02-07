@@ -13,7 +13,7 @@ services:
       SHOPIFY_APP_URL: "https://smartenrich.automasc.com"
       SCOPES: "read_products,write_products,read_product_listings,read_inventory"
       DATABASE_URL: "postgresql://smartenrich:${DB_PASSWORD}@postgres:5432/smartenrich"
-      REDIS_URL: "redis://redis:6379/2"
+      REDIS_URL: "redis://redis:6379/3"
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
       GEMINI_MODEL: "gemini-2.5-flash"
       GO_UPC_API_KEY: "${GO_UPC_API_KEY}"
@@ -60,7 +60,7 @@ services:
     command: ["npm", "run", "worker"]
     environment:
       DATABASE_URL: "postgresql://smartenrich:${DB_PASSWORD}@postgres:5432/smartenrich"
-      REDIS_URL: "redis://redis:6379/2"
+      REDIS_URL: "redis://redis:6379/3"
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
       GEMINI_MODEL: "gemini-2.5-flash"
       GO_UPC_API_KEY: "${GO_UPC_API_KEY}"
