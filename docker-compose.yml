@@ -16,7 +16,7 @@ services:
         - "traefik.enable=true"
         - "traefik.http.routers.smartenrich.rule=Host(`smartenrich.automasc.com`)"
         - "traefik.http.routers.smartenrich.entrypoints=websecure"
-        - "traefik.http.routers.smartenrich.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.smartenrich.tls.certresolver=letsencryptresolver"
         - "traefik.http.services.smartenrich.loadbalancer.server.port=3100"
       resources:
         limits:
