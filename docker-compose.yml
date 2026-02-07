@@ -14,6 +14,7 @@ services:
       replicas: 1
       labels:
         - "traefik.enable=true"
+        - "traefik.docker.network=CFNet"
         - "traefik.http.routers.smartenrich.rule=Host(`smartenrich.automasc.com`)"
         - "traefik.http.routers.smartenrich.entrypoints=websecure"
         - "traefik.http.routers.smartenrich.tls.certresolver=letsencryptresolver"
