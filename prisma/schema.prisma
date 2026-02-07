@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Sesion OAuth de Shopify (del template oficial)
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+// Configuracion de la app por tienda
+model AppConfig {
+  id                  String   @id @default(cuid())
+  shop                String   @unique
+  
+  // API Keys (encriptadas)
+  geminiApiKey        String?
+  goUpcApiKey          String?
+  barcodeLookupApiKey  String?
+  googleSearchApiKey   String?
+  googleSearchCx       String?
+  internalApiKey       String?  // Para autenticar llamadas de n8n
+  
+  // MinIO
+  minioAccessKey       String?
+  minioSecretKey       String?
+  minioBucket          String   @default("smartenrich-images")
+  
+  // Cron / Scheduler
+  cronSchedule        String   @default("0 2 * * *")
+  cronEnabled         Boolean  @default(true)
+  
+  // Modo de operacion
+  autoApply           Boolean  @default(false) // false = aprobacion manual
+  
+  // Limites
+  maxProductsPerRun   Int      @default(50)
+  minConfidenceScore  Float    @default(0.7)
+  
+  // Exclusiones
+  excludeVendors      String[] @default([])
+  excludeTags         String[] @default([])
+  excludeProductTypes String[] @default([])
+  
+  // Timestamps
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// Cada ejecucion del pipeline
+model EnrichmentRun {
+  id              String          @id @default(cuid())
+  shop            String
+  status          RunStatus       @default(RUNNING)
+  triggeredBy     TriggerType
+  
+  startedAt       DateTime        @default(now())
+  completedAt     DateTime?
+  
+  totalProducts   Int             @default(0)
+  enrichedCount   Int             @default(0)
+  failedCount     Int             @default(0)
+  skippedCount    Int             @default(0)
+  
+  errorMessage    String?
+  
+  // Relacion con logs individuales
+  logs            EnrichmentLog[]
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([shop])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// Log de cada producto procesado
+model EnrichmentLog {
+  id                    String        @id @default(cuid())
+  
+  // Relacion con el run
+  runId                 String
+  run                   EnrichmentRun @relation(fields: [runId], references: [id])
+  
+  shop                  String
+  shopifyProductId      String        // gid://shopify/Product/xxx
+  shopifyProductTitle   String
+  
+  // Scores
+  scoreBefore           Int           // 0-100
+  scoreAfter            Int?          // 0-100
+  
+  // Estado del enriquecimiento
+  status                LogStatus     @default(PENDING)
+  
+  // Datos antes y despues (JSON)
+  originalData          Json          // Snapshot del producto original
+  proposedChanges       Json?         // Cambios propuestos por Gemini
+  appliedChanges        Json?         // Cambios efectivamente aplicados
+  
+  // AI info
+  confidenceScore       Float?        // 0.0 - 1.0
+  aiModel               String?       // "gemini-2.5-flash"
+  aiResponseRaw         String?       // Respuesta cruda de Gemini
+  
+  // Datos de busqueda
+  barcodeData           Json?         // Datos del barcode API
+  searchData            Json?         // Datos de Google Search
+  
+  // Error info
+  errorMessage          String?
+  
+  // Timestamps
+  processedAt           DateTime      @default(now())
+  approvedAt            DateTime?
+  appliedAt             DateTime?
+  
+  @@index([runId])
+  @@index([shop])
+  @@index([shopifyProductId])
+  @@index([status])
+}
+
+enum RunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TriggerType {
+  CRON
+  MANUAL
+  WEBHOOK
+  N8N
+}
+
+enum LogStatus {
+  PENDING     // Esperando aprobacion
+  APPROVED    // Aprobado, pendiente de aplicar
+  APPLIED     // Aplicado exitosamente
+  REJECTED    // Rechazado por el merchant
+  FAILED      // Error al procesar o aplicar
+  SKIPPED     // Score >= 80, no necesita enriquecimiento
+}

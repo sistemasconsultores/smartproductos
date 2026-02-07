@@ -1,0 +1,95 @@
+{
+  "namespace": "custom",
+  "metafields": [
+    {
+      "key": "memoria_ram",
+      "name": "Memoria RAM",
+      "type": "single_line_text_field",
+      "description": "Capacidad y tipo de RAM (ej: 16 GB DDR5)"
+    },
+    {
+      "key": "almacenamiento",
+      "name": "Almacenamiento",
+      "type": "single_line_text_field",
+      "description": "Tipo y capacidad (ej: 512 GB SSD NVMe)"
+    },
+    {
+      "key": "procesador_marca",
+      "name": "Marca del Procesador",
+      "type": "single_line_text_field",
+      "description": "Intel, AMD, Apple, Qualcomm, etc."
+    },
+    {
+      "key": "procesador_tipo",
+      "name": "Tipo de Procesador",
+      "type": "single_line_text_field",
+      "description": "Modelo especifico (ej: Core i7-13700H)"
+    },
+    {
+      "key": "pantalla",
+      "name": "Pantalla",
+      "type": "single_line_text_field",
+      "description": "Tamano y tipo (ej: 15.6 pulgadas FHD IPS)"
+    },
+    {
+      "key": "color",
+      "name": "Color",
+      "type": "single_line_text_field",
+      "description": "Color del producto"
+    },
+    {
+      "key": "conectividad",
+      "name": "Conectividad",
+      "type": "single_line_text_field",
+      "description": "WiFi, Bluetooth, puertos (ej: WiFi 6E, BT 5.3, USB-C)"
+    },
+    {
+      "key": "peso",
+      "name": "Peso",
+      "type": "single_line_text_field",
+      "description": "Peso del producto (ej: 1.8 kg)"
+    },
+    {
+      "key": "dimensiones",
+      "name": "Dimensiones",
+      "type": "single_line_text_field",
+      "description": "Largo x Ancho x Alto (ej: 35.6 x 25.2 x 1.8 cm)"
+    },
+    {
+      "key": "bateria",
+      "name": "Bateria",
+      "type": "single_line_text_field",
+      "description": "Capacidad y duracion (ej: 72 Wh, hasta 10 horas)"
+    },
+    {
+      "key": "garantia",
+      "name": "Garantia",
+      "type": "single_line_text_field",
+      "description": "Periodo de garantia (ej: 1 ano del fabricante)"
+    },
+    {
+      "key": "sistema_operativo",
+      "name": "Sistema Operativo",
+      "type": "single_line_text_field",
+      "description": "OS instalado (ej: Windows 11 Pro)"
+    },
+    {
+      "key": "resolucion",
+      "name": "Resolucion",
+      "type": "single_line_text_field",
+      "description": "Resolucion de pantalla (ej: 1920 x 1080)"
+    },
+    {
+      "key": "modelo",
+      "name": "Modelo",
+      "type": "single_line_text_field",
+      "description": "Numero de modelo del fabricante"
+    },
+    {
+      "key": "numero_parte",
+      "name": "Numero de Parte",
+      "type": "single_line_text_field",
+      "description": "Part number del fabricante"
+    }
+  ]
+}

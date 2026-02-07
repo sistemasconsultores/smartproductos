@@ -1,0 +1,96 @@
+version: "3.8"
+
+services:
+  app:
+    image: smartenrich:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npm", "run", "start"]
+    environment:
+      SHOPIFY_API_KEY: "${SHOPIFY_API_KEY}"
+      SHOPIFY_API_SECRET: "${SHOPIFY_API_SECRET}"
+      SHOPIFY_APP_URL: "https://smartenrich.automasc.com"
+      SCOPES: "read_products,write_products,read_product_listings,read_inventory"
+      DATABASE_URL: "postgresql://smartenrich:${DB_PASSWORD}@postgres:5432/smartenrich"
+      REDIS_URL: "redis://redis:6379/2"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+      GEMINI_MODEL: "gemini-2.5-flash"
+      GO_UPC_API_KEY: "${GO_UPC_API_KEY}"
+      BARCODE_LOOKUP_API_KEY: "${BARCODE_LOOKUP_API_KEY}"
+      GOOGLE_SEARCH_API_KEY: "${GOOGLE_SEARCH_API_KEY}"
+      GOOGLE_SEARCH_CX: "${GOOGLE_SEARCH_CX}"
+      MINIO_ENDPOINT: "minio"
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: "${MINIO_ACCESS_KEY}"
+      MINIO_SECRET_KEY: "${MINIO_SECRET_KEY}"
+      MINIO_BUCKET: "smartenrich-images"
+      NODE_ENV: "production"
+      PORT: "3100"
+      SESSION_SECRET: "${SESSION_SECRET}"
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY}"
+    ports:
+      - "3100:3100"
+    networks:
+      - smartenrich
+      - traefik-public
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.smartenrich.rule=Host(`smartenrich.automasc.com`)"
+        - "traefik.http.routers.smartenrich.entrypoints=websecure"
+        - "traefik.http.routers.smartenrich.tls.certresolver=letsencrypt"
+        - "traefik.http.services.smartenrich.loadbalancer.server.port=3100"
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+    volumes:
+      - smartenrich-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    image: smartenrich:latest
+    command: ["npm", "run", "worker"]
+    environment:
+      DATABASE_URL: "postgresql://smartenrich:${DB_PASSWORD}@postgres:5432/smartenrich"
+      REDIS_URL: "redis://redis:6379/2"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+      GEMINI_MODEL: "gemini-2.5-flash"
+      GO_UPC_API_KEY: "${GO_UPC_API_KEY}"
+      BARCODE_LOOKUP_API_KEY: "${BARCODE_LOOKUP_API_KEY}"
+      GOOGLE_SEARCH_API_KEY: "${GOOGLE_SEARCH_API_KEY}"
+      GOOGLE_SEARCH_CX: "${GOOGLE_SEARCH_CX}"
+      MINIO_ENDPOINT: "minio"
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: "${MINIO_ACCESS_KEY}"
+      MINIO_SECRET_KEY: "${MINIO_SECRET_KEY}"
+      MINIO_BUCKET: "smartenrich-images"
+      NODE_ENV: "production"
+      WORKER_CONCURRENCY: "3"
+      MAX_PRODUCTS_PER_RUN: "50"
+    networks:
+      - smartenrich
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2048M
+
+networks:
+  smartenrich:
+    driver: overlay
+  traefik-public:
+    external: true
+
+volumes:
+  smartenrich-data:
+    driver: local

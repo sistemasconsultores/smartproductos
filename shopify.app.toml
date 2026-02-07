@@ -1,0 +1,32 @@
+name = "Productos"
+client_id = "843e58d69ee44d65a8927ffd8a387f09c"
+application_url = "https://smartenrich.automasc.com"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_product_listings,read_inventory"
+
+[auth]
+redirect_urls = [
+  "https://smartenrich.automasc.com/auth/callback",
+  "https://smartenrich.automasc.com/auth/shopify/callback",
+  "https://smartenrich.automasc.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2026-01"
+
+[[webhooks.subscriptions]]
+topics = ["products/create"]
+uri = "/webhooks"
+
+[[webhooks.subscriptions]]
+topics = ["products/update"]
+uri = "/webhooks"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "smartcostarica.myshopify.com"
