@@ -18,6 +18,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import type { GeminiEnrichmentResponse } from "../services/enrichment/gemini.server";
 import { applyEnrichment } from "../services/enrichment/shopify-updater.server";
+import { fetchSingleProduct } from "../services/shopify/queries.server";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -70,10 +71,15 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return json({ error: "No hay cambios propuestos" }, { status: 400 });
   }
 
+  // Fetch current product tags from Shopify to merge (not replace)
+  const product = await fetchSingleProduct(admin, log.shopifyProductId);
+  const existingTags = product?.tags ?? [];
+
   const result = await applyEnrichment(
     admin,
     log.shopifyProductId,
     enrichment,
+    existingTags,
   );
 
   if (result.errors.length > 0) {
