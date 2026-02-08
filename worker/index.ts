@@ -2,6 +2,10 @@
 // Ejecutar como proceso separado: npm run worker
 // Procesa jobs de BullMQ + cron diario integrado
 
+// MUST import the Node adapter before anything that touches @shopify packages
+// This sets up the abstractFetch implementation for the Shopify GraphQL client
+import "@shopify/shopify-app-remix/adapters/node";
+
 import { PrismaClient } from "@prisma/client";
 import { createEnrichmentWorker } from "../app/services/queue/enrichment.worker.server";
 import { setupCronJob } from "../app/services/queue/enrichment.queue.server";
