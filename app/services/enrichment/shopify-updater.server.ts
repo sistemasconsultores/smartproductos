@@ -141,6 +141,7 @@ export async function applyEnrichment(
 
   // 3. Add images if provided
   if (imageUrls && imageUrls.length > 0) {
+    console.log(`[updater] Attempting to add ${imageUrls.length} images to ${productId}`);
     const altTexts = enrichment.image_analysis?.suggested_alt_texts || [];
     const imageInputs = imageUrls.map((url, i) => ({
       originalSource: url,
@@ -149,14 +150,27 @@ export async function applyEnrichment(
         `${enrichment.product_type || "Producto"} - imagen ${i + 1}`,
     }));
 
-    const imageResult = await addProductImages(
-      admin,
-      productId,
-      imageInputs,
-    );
+    // Try batch first
+    const imageResult = await addProductImages(admin, productId, imageInputs);
     if (imageResult.success) {
       imagesAdded = true;
+      console.log(`[updater] Successfully added ${imageInputs.length} images`);
+    } else if (imageInputs.length > 1) {
+      // Batch failed - retry individual images so one bad URL doesn't block all
+      console.warn(`[updater] Batch image upload failed, retrying individually: ${imageResult.errors.join("; ")}`);
+      let anySuccess = false;
+      for (const img of imageInputs) {
+        const individual = await addProductImages(admin, productId, [img]);
+        if (individual.success) {
+          anySuccess = true;
+        } else {
+          console.warn(`[updater] Failed to add image ${img.originalSource}: ${individual.errors.join("; ")}`);
+        }
+      }
+      if (anySuccess) imagesAdded = true;
+      if (!anySuccess) errors.push("All image uploads failed");
     } else {
+      console.warn(`[updater] Image upload failed: ${imageResult.errors.join("; ")}`);
       errors.push(...imageResult.errors);
     }
   }

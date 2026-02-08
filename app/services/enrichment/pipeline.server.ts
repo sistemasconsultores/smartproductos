@@ -302,6 +302,13 @@ async function processProduct(
       sku,
     );
     newImageUrls = imageResults.slice(0, 5).map((img) => img.url);
+    console.log(
+      `[pipeline] Image search for "${product.title}": ${imageResults.length} found, ${newImageUrls.length} selected (current images: ${analysis.imageCount})`,
+    );
+  } else {
+    console.log(
+      `[pipeline] Skipping image search for "${product.title}" (already has ${analysis.imageCount} images)`,
+    );
   }
 
   // Step 4: AI Process
@@ -367,6 +374,9 @@ async function processProduct(
       );
     }
 
+    // Store image URLs for reference (reusing deprecated barcodeData field)
+    const imageData = newImageUrls.length > 0 ? newImageUrls : null;
+
     await prisma.enrichmentLog.create({
       data: {
         runId,
@@ -381,7 +391,7 @@ async function processProduct(
         confidenceScore: confidenceNum,
         aiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
         aiResponseRaw: aiRaw,
-        barcodeData: null,
+        barcodeData: imageData as unknown as Prisma.InputJsonValue,
         searchData: searchResults as unknown as Prisma.InputJsonValue,
         appliedAt: result.errors.length === 0 ? new Date() : undefined,
         errorMessage:
@@ -394,7 +404,9 @@ async function processProduct(
     return result.errors.length === 0 ? "enriched" : "failed";
   }
 
-  // Save as pending for manual approval
+  // Save as pending for manual approval (store image URLs for later use)
+  const imageData = newImageUrls.length > 0 ? newImageUrls : null;
+
   await prisma.enrichmentLog.create({
     data: {
       runId,
@@ -408,7 +420,7 @@ async function processProduct(
       confidenceScore: confidenceNum,
       aiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
       aiResponseRaw: aiRaw,
-      barcodeData: null,
+      barcodeData: imageData as unknown as Prisma.InputJsonValue,
       searchData: searchResults as unknown as Prisma.InputJsonValue,
     },
   });

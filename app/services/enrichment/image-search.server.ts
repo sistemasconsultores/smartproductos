@@ -28,10 +28,15 @@ export async function searchProductImages(
 
   const results = await serperImageSearch(query);
 
-  // Filter for minimum quality: 1024x1024
-  const filtered = results.filter(
-    (img) => img.width >= 1024 && img.height >= 1024,
-  );
+  // Filter for minimum quality: at least one dimension >= 800, or unknown dimensions accepted
+  const filtered = results.filter((img) => {
+    // Accept images with unknown dimensions (Serper sometimes omits width/height)
+    if (img.width === 0 && img.height === 0) return true;
+    // Accept if the larger dimension is >= 800 (handles landscape and portrait)
+    return Math.max(img.width, img.height) >= 800;
+  });
+
+  console.log(`[images] Query: "${query}" -> ${results.length} raw, ${filtered.length} after quality filter`);
 
   if (filtered.length > 0) {
     await setCachedData(
