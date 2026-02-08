@@ -1,12 +1,15 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { Prisma } from "@prisma/client";
 import { json } from "@remix-run/node";
-import { useLoaderData, useSubmit, useNavigation } from "@remix-run/react";
-import { Page, Layout, BlockStack, Banner, Button } from "@shopify/polaris";
+import { useLoaderData, useSubmit, useNavigation, useActionData } from "@remix-run/react";
+import { Page, Layout, BlockStack, Banner, Button, InlineStack } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { StatsCards } from "../components/StatsCards";
 import { EnrichmentProgress } from "../components/EnrichmentProgress";
 import { enqueueBatchEnrichment } from "../services/queue/enrichment.queue.server";
+import { applyEnrichment } from "../services/enrichment/shopify-updater.server";
+import type { GeminiEnrichmentResponse } from "../services/enrichment/gemini.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -42,7 +45,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
 
@@ -51,11 +54,57 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ success: true, jobId });
   }
 
+  if (intent === "bulk-approve") {
+    const pendingLogs = await prisma.enrichmentLog.findMany({
+      where: { shop: session.shop, status: "PENDING" },
+    });
+
+    let applied = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const log of pendingLogs) {
+      const enrichment = log.proposedChanges as unknown as GeminiEnrichmentResponse;
+      if (!enrichment) {
+        failed++;
+        continue;
+      }
+
+      const result = await applyEnrichment(admin, log.shopifyProductId, enrichment);
+
+      if (result.errors.length === 0) {
+        await prisma.enrichmentLog.update({
+          where: { id: log.id },
+          data: {
+            status: "APPLIED",
+            appliedChanges: enrichment as unknown as Prisma.InputJsonValue,
+            approvedAt: new Date(),
+            appliedAt: new Date(),
+          },
+        });
+        applied++;
+      } else {
+        await prisma.enrichmentLog.update({
+          where: { id: log.id },
+          data: {
+            status: "FAILED",
+            errorMessage: result.errors.join("; "),
+          },
+        });
+        failed++;
+        errors.push(`${log.shopifyProductTitle}: ${result.errors.join("; ")}`);
+      }
+    }
+
+    return json({ success: true, bulkResult: { applied, failed, total: pendingLogs.length, errors } });
+  }
+
   return json({ error: "Unknown action" }, { status: 400 });
 };
 
 export default function Dashboard() {
   const { stats, latestRun } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const submit = useSubmit();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -63,6 +112,13 @@ export default function Dashboard() {
   const handleEnrich = () => {
     submit({ intent: "enrich" }, { method: "post" });
   };
+
+  const handleBulkApprove = () => {
+    submit({ intent: "bulk-approve" }, { method: "post" });
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bulkResult = (actionData as any)?.bulkResult;
 
   return (
     <Page title="SmartEnrich Dashboard">
@@ -79,13 +135,34 @@ export default function Dashboard() {
 
           <Layout.Section>
             <BlockStack gap="400">
-              <Button
-                variant="primary"
-                onClick={handleEnrich}
-                loading={isSubmitting}
-              >
-                Ejecutar enriquecimiento manual
-              </Button>
+              <InlineStack gap="300">
+                <Button
+                  variant="primary"
+                  onClick={handleEnrich}
+                  loading={isSubmitting}
+                >
+                  Ejecutar enriquecimiento manual
+                </Button>
+
+                {stats.pendingCount > 0 && (
+                  <Button
+                    variant="primary"
+                    tone="success"
+                    onClick={handleBulkApprove}
+                    loading={isSubmitting}
+                  >
+                    {`Aprobar todos (${stats.pendingCount} pendientes)`}
+                  </Button>
+                )}
+              </InlineStack>
+
+              {bulkResult && (
+                <Banner
+                  tone={bulkResult.failed === 0 ? "success" : "warning"}
+                >
+                  Aprobación masiva: {bulkResult.applied} aplicados, {bulkResult.failed} fallidos de {bulkResult.total} total.
+                </Banner>
+              )}
 
               {latestRun && (
                 <EnrichmentProgress
@@ -99,7 +176,7 @@ export default function Dashboard() {
                 />
               )}
 
-              {stats.pendingCount > 0 && (
+              {stats.pendingCount > 0 && !bulkResult && (
                 <Banner tone="warning">
                   Hay {stats.pendingCount} producto(s) pendientes de
                   aprobación.

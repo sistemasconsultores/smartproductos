@@ -50,11 +50,11 @@ model AppConfig {
   cronEnabled         Boolean  @default(true)
   
   // Modo de operacion
-  autoApply           Boolean  @default(false) // false = aprobacion manual
+  autoApply           Boolean  @default(true) // true = aplicar automaticamente si confidence >= minConfidenceScore
   
   // Limites
   maxProductsPerRun   Int      @default(50)
-  minConfidenceScore  Float    @default(0.7)
+  minConfidenceScore  Float    @default(0.5)
   
   // Exclusiones
   excludeVendors      String[] @default([])

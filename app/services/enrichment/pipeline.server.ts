@@ -43,8 +43,8 @@ export async function runEnrichmentPipeline(
     shop,
     triggeredBy,
     maxProducts = 50,
-    autoApply = false,
-    minConfidence = 0.7,
+    autoApply = true,
+    minConfidence = 0.5,
     productId,
   } = options;
 

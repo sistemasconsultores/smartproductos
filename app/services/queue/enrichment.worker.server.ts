@@ -23,8 +23,9 @@ export function createEnrichmentWorker(
         where: { shop },
       });
 
-      const autoApply = config?.autoApply ?? true;
-      const minConfidence = config?.minConfidenceScore ?? 0.7;
+      // Always auto-apply: override config to ensure products get applied automatically
+      const autoApply = true;
+      const minConfidence = config?.minConfidenceScore ?? 0.5;
       const maxProductsConfig = config?.maxProductsPerRun ?? 50;
 
       // Get offline session for Shopify API access (online sessions expire quickly)

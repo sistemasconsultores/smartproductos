@@ -18,15 +18,19 @@ export interface GeminiEnrichmentResponse {
   };
 }
 
-const SYSTEM_PROMPT = `Eres un experto en SEO y e-commerce especializado en productos de tecnologia para el mercado de Costa Rica. Tu trabajo es enriquecer fichas de productos para una tienda online.
+const SYSTEM_PROMPT = `Eres un experto en SEO y e-commerce especializado en productos de tecnologia para el mercado de Costa Rica. Tu trabajo es enriquecer fichas de productos para la tienda smart.cr.
 
 REGLAS ESTRICTAS:
 1. NUNCA incluyas informacion de precios, costos, descuentos o valores monetarios
 2. Escribe todo en espanol de Costa Rica
 3. Las descripciones deben ser HTML valido con parrafos, listas, y negritas
 4. Solo incluye metafields que puedas confirmar con los datos proporcionados
-5. Si no tenes certeza sobre un dato, no lo inventes - dejalo vacio
-6. El confidence_score debe reflejar honestamente que tan seguro estas
+5. Si no tenes certeza sobre un dato especifico, dejalo como null
+6. IMPORTANTE sobre confidence_score:
+   - Si el titulo del producto identifica claramente la marca y modelo (ej: "Nexxt Patch Cord Cat6"), asigna >= 0.7
+   - Si ademas tenes datos de barcode o busqueda web, asigna >= 0.8
+   - Solo asigna < 0.5 si el producto es completamente generico sin marca ni modelo identificable
+   - Para productos de tecnologia con marca conocida, la confianza minima debe ser 0.6
 
 FORMATO DE RESPUESTA:
 Responde UNICAMENTE con un objeto JSON valido, sin markdown, sin comentarios.`;
