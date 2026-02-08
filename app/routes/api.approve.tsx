@@ -61,11 +61,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const product = await fetchSingleProduct(admin, log.shopifyProductId);
   const existingTags = product?.tags ?? [];
 
+  // Retrieve stored image URLs from barcodeData (stored during pipeline)
+  const storedImageUrls = Array.isArray(log.barcodeData) ? (log.barcodeData as string[]) : undefined;
+
   const result = await applyEnrichment(
     admin,
     log.shopifyProductId,
     enrichment,
     existingTags,
+    storedImageUrls,
   );
 
   if (result.errors.length > 0) {
