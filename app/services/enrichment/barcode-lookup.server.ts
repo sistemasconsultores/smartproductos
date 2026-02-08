@@ -58,8 +58,7 @@ async function goUpcLookup(barcode: string): Promise<BarcodeData | null> {
     if (!response.ok) {
       if (response.status === 404) return null;
       if (response.status === 429) {
-        console.warn("[barcode] Go-UPC rate limited");
-        return null;
+        return null; // Rate limited, silently skip
       }
       throw new Error(`Go-UPC error: ${response.status}`);
     }
@@ -94,8 +93,7 @@ async function upcItemDbLookup(barcode: string): Promise<BarcodeData | null> {
 
     if (!response.ok) {
       if (response.status === 429) {
-        console.warn("[barcode] UPCitemdb rate limited");
-        return null;
+        return null; // Rate limited, silently skip
       }
       return null;
     }

@@ -71,10 +71,36 @@ export async function runEnrichmentPipeline(
       products = await fetchAllActiveProducts(admin, maxProducts);
     }
 
+    // Step 1b: Filter out already-enriched products (APPLIED or PENDING)
+    const existingLogs = await prisma.enrichmentLog.findMany({
+      where: {
+        shop,
+        shopifyProductId: { in: products.map((p) => p.id) },
+        status: { in: ["APPLIED", "PENDING"] },
+      },
+      select: { shopifyProductId: true },
+    });
+    const alreadyProcessed = new Set(
+      existingLogs.map((l) => l.shopifyProductId),
+    );
+    const newProducts = products.filter(
+      (p) => !alreadyProcessed.has(p.id),
+    );
+
+    console.log(
+      `[pipeline] Fetched ${products.length} active products, ${alreadyProcessed.size} already enriched, ${newProducts.length} new to process`,
+    );
+
+    products = newProducts;
+
     await prisma.enrichmentRun.update({
       where: { id: run.id },
       data: { totalProducts: products.length },
     });
+
+    if (products.length === 0) {
+      console.log("[pipeline] No new products to enrich, run complete");
+    }
 
     // Process each product
     for (const product of products) {
@@ -215,9 +241,15 @@ async function processProduct(
     searchResults,
   );
 
+  // Parse confidence as number (Gemini may return string)
+  const confidenceNum = Number(enrichment.confidence_score) || 0;
+
   // Step 5: Validate
   const validation = validateGeminiResponse(enrichment);
   if (!validation.valid) {
+    console.log(
+      `[pipeline] Validation FAILED for "${product.title}": ${validation.errors.join("; ")}`,
+    );
     await prisma.enrichmentLog.create({
       data: {
         runId,
@@ -230,7 +262,7 @@ async function processProduct(
         proposedChanges: enrichment as unknown as Prisma.InputJsonValue,
         aiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
         aiResponseRaw: aiRaw,
-        confidenceScore: enrichment.confidence_score,
+        confidenceScore: confidenceNum,
         barcodeData: barcodeData as unknown as Prisma.InputJsonValue,
         searchData: searchResults as unknown as Prisma.InputJsonValue,
         errorMessage: `Validation failed: ${validation.errors.join("; ")}`,
@@ -240,19 +272,30 @@ async function processProduct(
   }
 
   // Step 6: Apply or save for approval
-  const shouldAutoApply =
-    autoApply && enrichment.confidence_score >= minConfidence;
+  const shouldAutoApply = autoApply && confidenceNum >= minConfidence;
+
+  console.log(
+    `[pipeline] Product "${product.title}" - autoApply: ${autoApply}, confidence: ${confidenceNum} (raw: ${enrichment.confidence_score}), threshold: ${minConfidence}, decision: ${shouldAutoApply ? "AUTO-APPLY" : "PENDING"}`,
+  );
 
   if (shouldAutoApply) {
-    console.log(
-      `[pipeline] Auto-applying ${product.id} (confidence: ${enrichment.confidence_score}, threshold: ${minConfidence})`,
-    );
     const result = await applyEnrichment(
       admin,
       product.id,
       enrichment,
       newImageUrls.length > 0 ? newImageUrls : undefined,
     );
+
+    if (result.errors.length > 0) {
+      console.error(
+        `[pipeline] Auto-apply FAILED for "${product.title}":`,
+        result.errors,
+      );
+    } else {
+      console.log(
+        `[pipeline] Auto-apply SUCCESS for "${product.title}" (product: ${result.productUpdated}, metafields: ${result.metafieldsUpdated}, images: ${result.imagesAdded})`,
+      );
+    }
 
     await prisma.enrichmentLog.create({
       data: {
@@ -265,7 +308,7 @@ async function processProduct(
         originalData: productSnapshot(product),
         proposedChanges: enrichment as unknown as Prisma.InputJsonValue,
         appliedChanges: enrichment as unknown as Prisma.InputJsonValue,
-        confidenceScore: enrichment.confidence_score,
+        confidenceScore: confidenceNum,
         aiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
         aiResponseRaw: aiRaw,
         barcodeData: barcodeData as unknown as Prisma.InputJsonValue,
@@ -292,7 +335,7 @@ async function processProduct(
       status: "PENDING",
       originalData: productSnapshot(product),
       proposedChanges: enrichment as unknown as Prisma.InputJsonValue,
-      confidenceScore: enrichment.confidence_score,
+      confidenceScore: confidenceNum,
       aiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
       aiResponseRaw: aiRaw,
       barcodeData: barcodeData as unknown as Prisma.InputJsonValue,
@@ -300,7 +343,7 @@ async function processProduct(
     },
   });
 
-  return "enriched";
+  return "skipped"; // Not auto-applied, saved as PENDING
 }
 
 function productSnapshot(
