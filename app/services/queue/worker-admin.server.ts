@@ -30,6 +30,14 @@ export function createAdminApiContext(shop: string, accessToken: string) {
 
       const data = await response.json();
 
+      // Log GraphQL errors for debugging
+      if (data.errors) {
+        console.error(
+          `[worker-admin] GraphQL errors for ${shop}:`,
+          JSON.stringify(data.errors, null, 2),
+        );
+      }
+
       return {
         json: async () => data,
       };

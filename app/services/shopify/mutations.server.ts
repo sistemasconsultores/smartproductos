@@ -94,7 +94,16 @@ export async function updateProduct(
   const json = await response.json();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = json.data as any;
-  const errors = data?.productUpdate?.userErrors ?? [];
+
+  if (!data) {
+    const gqlErrors = (json as Record<string, unknown>).errors;
+    return {
+      success: false,
+      errors: [`Shopify GraphQL error: ${JSON.stringify(gqlErrors || "No data returned")}`],
+    };
+  }
+
+  const errors = data.productUpdate?.userErrors ?? [];
 
   return {
     success: errors.length === 0,
@@ -116,7 +125,16 @@ export async function setMetafields(
   const json = await response.json();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = json.data as any;
-  const errors = data?.metafieldsSet?.userErrors ?? [];
+
+  if (!data) {
+    const gqlErrors = (json as Record<string, unknown>).errors;
+    return {
+      success: false,
+      errors: [`Shopify GraphQL error: ${JSON.stringify(gqlErrors || "No data returned")}`],
+    };
+  }
+
+  const errors = data.metafieldsSet?.userErrors ?? [];
 
   return {
     success: errors.length === 0,
@@ -145,7 +163,16 @@ export async function addProductImages(
   const json = await response.json();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = json.data as any;
-  const errors = data?.productCreateMedia?.mediaUserErrors ?? [];
+
+  if (!data) {
+    const gqlErrors = (json as Record<string, unknown>).errors;
+    return {
+      success: false,
+      errors: [`Shopify GraphQL error: ${JSON.stringify(gqlErrors || "No data returned")}`],
+    };
+  }
+
+  const errors = data.productCreateMedia?.mediaUserErrors ?? [];
 
   return {
     success: errors.length === 0,

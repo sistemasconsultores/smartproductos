@@ -27,10 +27,9 @@ export function createEnrichmentWorker(
         throw new Error(`No config found for shop: ${shop}`);
       }
 
-      // Get session for Shopify API access
+      // Get offline session for Shopify API access (online sessions expire quickly)
       const session = await prisma.session.findFirst({
-        where: { shop },
-        orderBy: { expires: "desc" },
+        where: { shop, isOnline: false },
       });
 
       if (!session?.accessToken) {
