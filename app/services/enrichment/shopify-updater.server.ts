@@ -88,25 +88,52 @@ export async function applyEnrichment(
   // 2. Set metafields
   const metafieldInputs = Object.entries(enrichment.metafields || {})
     .filter(([, value]) => value !== null && value !== undefined)
-    .map(([key, value]) => {
+    .reduce<Array<{ ownerId: string; namespace: string; key: string; value: string; type: string }>>((acc, [key, value]) => {
       // Handle keys with or without namespace prefix (e.g. "custom.modelo" or "modelo")
       const parts = key.split(".");
       const namespace = parts.length > 1 ? parts[0] : "custom";
       const metaKey = parts.length > 1 ? parts[1] : parts[0];
-      const isDecimal = metaKey === "peso";
-      return {
+
+      if (metaKey === "peso") {
+        // peso is number_decimal in Shopify - clean the value
+        const raw = String(value);
+        const cleaned = raw.replace(/,/g, ".").replace(/[^\d.]/g, "").trim();
+        const parsed = parseFloat(cleaned);
+        if (!isNaN(parsed) && isFinite(parsed)) {
+          acc.push({ ownerId: productId, namespace, key: metaKey, value: parsed.toString(), type: "number_decimal" });
+        } else {
+          console.warn(`[updater] Skipping peso metafield - unparseable decimal: "${raw}"`);
+        }
+        return acc;
+      }
+
+      acc.push({
         ownerId: productId,
         namespace,
         key: metaKey,
         value: String(value),
-        type: isDecimal ? "number_decimal" : "single_line_text_field",
-      };
-    });
+        type: "single_line_text_field",
+      });
+      return acc;
+    }, []);
 
   if (metafieldInputs.length > 0) {
     const metaResult = await setMetafields(admin, metafieldInputs);
     if (metaResult.success) {
       metafieldsUpdated = true;
+    } else if (metafieldInputs.length > 1) {
+      // Batch failed - retry individual metafields so one bad one doesn't block all
+      console.warn(`[updater] Batch metafields failed, retrying individually: ${metaResult.errors.join("; ")}`);
+      let anySuccess = false;
+      for (const mf of metafieldInputs) {
+        const individual = await setMetafields(admin, [mf]);
+        if (individual.success) {
+          anySuccess = true;
+        } else {
+          errors.push(`${mf.namespace}.${mf.key}: ${individual.errors.join("; ")}`);
+        }
+      }
+      if (anySuccess) metafieldsUpdated = true;
     } else {
       errors.push(...metaResult.errors);
     }
