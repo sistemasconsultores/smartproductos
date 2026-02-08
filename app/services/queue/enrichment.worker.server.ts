@@ -33,8 +33,21 @@ export function createEnrichmentWorker(
       });
 
       if (!session?.accessToken) {
-        throw new Error(`No valid session for shop: ${shop}`);
+        // Log what sessions exist for debugging
+        const allSessions = await prisma.session.findMany({
+          where: { shop },
+          select: { id: true, isOnline: true, scope: true, expires: true },
+        });
+        console.error(
+          `[worker] No offline session for ${shop}. All sessions:`,
+          JSON.stringify(allSessions),
+        );
+        throw new Error(`No valid offline session for shop: ${shop}`);
       }
+
+      console.log(
+        `[worker] Found session ${session.id}, isOnline: ${session.isOnline}, scope: ${session.scope?.slice(0, 50)}`,
+      );
 
       // Dynamic import to avoid bundling issues in worker context
       const { createAdminApiContext } = await import(

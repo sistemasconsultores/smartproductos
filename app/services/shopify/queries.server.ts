@@ -15,11 +15,6 @@ const PRODUCTS_FOR_ENRICHMENT_QUERY = `#graphql
           tags
           status
           totalInventory
-          category {
-            id
-            name
-            fullName
-          }
           seo {
             title
             description
@@ -79,11 +74,6 @@ const SINGLE_PRODUCT_QUERY = `#graphql
       tags
       status
       totalInventory
-      category {
-        id
-        name
-        fullName
-      }
       seo {
         title
         description
@@ -135,7 +125,7 @@ export interface ShopifyProduct {
   tags: string[];
   status: string;
   totalInventory: number;
-  category: { id: string; name: string; fullName: string } | null;
+  category?: { id: string; name: string; fullName: string } | null;
   seo: { title: string; description: string };
   variants: {
     edges: Array<{
