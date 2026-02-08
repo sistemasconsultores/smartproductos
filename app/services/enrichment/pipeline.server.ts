@@ -346,6 +346,7 @@ async function processProduct(
       admin,
       product.id,
       enrichment,
+      product.tags,
       newImageUrls.length > 0 ? newImageUrls : undefined,
     );
 

@@ -39,6 +39,7 @@ export async function applyEnrichment(
   admin: AdminApiContext,
   productId: string,
   enrichment: GeminiEnrichmentResponse,
+  existingTags: string[],
   imageUrls?: string[],
 ): Promise<UpdateResult> {
   const errors: string[] = [];
@@ -47,6 +48,7 @@ export async function applyEnrichment(
   let imagesAdded = false;
 
   // 1. Update product fields (description, type, tags, SEO)
+  // NEVER modify vendor/proveedor - only Shopify admin should change it
   const cleanHtml = sanitizeHtml(enrichment.description_html, {
     allowedTags: ALLOWED_HTML_TAGS,
     allowedAttributes: {
@@ -55,11 +57,22 @@ export async function applyEnrichment(
     },
   });
 
+  // Merge existing tags with AI-suggested tags (preserve all existing, add new ones)
+  const existingLower = new Set(existingTags.map((t) => t.toLowerCase()));
+  const newTags = (enrichment.tags || []).filter(
+    (t) => !existingLower.has(t.toLowerCase()),
+  );
+  const mergedTags = [...existingTags, ...newTags];
+
+  console.log(
+    `[updater] Tags: ${existingTags.length} existing + ${newTags.length} new = ${mergedTags.length} total`,
+  );
+
   const productResult = await updateProduct(admin, {
     id: productId,
     descriptionHtml: cleanHtml,
     productType: enrichment.product_type || undefined,
-    tags: enrichment.tags,
+    tags: mergedTags,
     seo: {
       title: enrichment.seo_title || undefined,
       description: enrichment.seo_description || undefined,
