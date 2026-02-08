@@ -39,7 +39,18 @@ export async function cacheImage(
     });
     if (!response.ok) return null;
 
+    // Reject images larger than 10MB to prevent memory exhaustion
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (contentLength > 10 * 1024 * 1024) {
+      console.warn(`[image-cache] Skipping oversized image (${contentLength} bytes): ${imageUrl}`);
+      return null;
+    }
+
     const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > 10 * 1024 * 1024) {
+      console.warn(`[image-cache] Downloaded image too large (${buffer.length} bytes), discarding`);
+      return null;
+    }
     const contentType =
       response.headers.get("content-type") || "image/jpeg";
     const ext = contentType.includes("png") ? "png" : "jpg";

@@ -122,8 +122,7 @@ export default function Dashboard() {
     submit({ intent: "bulk-approve" }, { method: "post" });
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bulkResult = (actionData as any)?.bulkResult;
+  const bulkResult = (actionData as { bulkResult?: { applied: number; failed: number; total: number; errors: string[] } } | undefined)?.bulkResult;
 
   return (
     <Page title="SmartEnrich Dashboard">

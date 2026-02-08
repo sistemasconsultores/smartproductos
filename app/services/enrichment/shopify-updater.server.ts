@@ -89,12 +89,15 @@ export async function applyEnrichment(
   const metafieldInputs = Object.entries(enrichment.metafields || {})
     .filter(([, value]) => value !== null && value !== undefined)
     .map(([key, value]) => {
-      const [namespace, metaKey] = key.split(".");
+      // Handle keys with or without namespace prefix (e.g. "custom.modelo" or "modelo")
+      const parts = key.split(".");
+      const namespace = parts.length > 1 ? parts[0] : "custom";
+      const metaKey = parts.length > 1 ? parts[1] : parts[0];
       const isDecimal = metaKey === "peso";
       return {
         ownerId: productId,
-        namespace: namespace || "custom",
-        key: metaKey || key,
+        namespace,
+        key: metaKey,
         value: String(value),
         type: isDecimal ? "number_decimal" : "single_line_text_field",
       };

@@ -113,9 +113,9 @@ export async function runEnrichmentPipeline(
             shopifyProductTitle: product.title,
             scoreBefore: 0,
             status: "FAILED",
-            originalData: {} as Prisma.InputJsonValue,
+            originalData: productSnapshot(product),
             errorMessage:
-              error instanceof Error ? error.message : "Unknown error",
+              error instanceof Error ? error.message : String(error),
           },
         });
       }
