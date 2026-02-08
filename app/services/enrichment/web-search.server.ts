@@ -12,6 +12,10 @@ export interface SearchResult {
   link: string;
 }
 
+type SearchProvider = (query: string) => Promise<SearchResult[]>;
+
+const providers: SearchProvider[] = [serpApiSearch, serperSearch, googleCustomSearch];
+
 export async function searchBySkuOrTitle(
   sku: string | null,
   title: string,
@@ -27,7 +31,20 @@ export async function searchBySkuOrTitle(
     return JSON.parse(cached) as SearchResult[];
   }
 
-  const results = await googleCustomSearch(query);
+  console.log(`[search] Query: "${query}" | Providers: SERPAPI_KEY=${process.env.SERPAPI_KEY ? "set" : "unset"}, SERPER_API_KEY=${process.env.SERPER_API_KEY ? "set" : "unset"}, GOOGLE_SEARCH_API_KEY=${process.env.GOOGLE_SEARCH_API_KEY ? "set" : "unset"}, GOOGLE_SEARCH_CX=${process.env.GOOGLE_SEARCH_CX ? "set" : "unset"}`);
+
+  let results: SearchResult[] = [];
+  for (const provider of providers) {
+    results = await provider(query);
+    if (results.length > 0) {
+      console.log(`[search] Got ${results.length} results from ${provider.name}`);
+      break;
+    }
+  }
+
+  if (results.length === 0) {
+    console.log(`[search] All providers returned 0 results for: "${query}"`);
+  }
 
   if (results.length > 0) {
     await setCachedData(
@@ -38,6 +55,68 @@ export async function searchBySkuOrTitle(
   }
 
   return results;
+}
+
+async function serpApiSearch(query: string): Promise<SearchResult[]> {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) return [];
+
+  try {
+    const params = new URLSearchParams({
+      engine: "google",
+      q: query,
+      api_key: apiKey,
+      num: "5",
+    });
+
+    const response = await fetch(
+      `https://serpapi.com/search.json?${params}`,
+      { signal: AbortSignal.timeout(10000) },
+    );
+
+    if (!response.ok) return [];
+
+    const json: { organic_results?: { title: string; snippet: string; link: string }[] } =
+      await response.json();
+
+    return (json.organic_results ?? []).map((item) => ({
+      title: item.title,
+      snippet: item.snippet,
+      link: item.link,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function serperSearch(query: string): Promise<SearchResult[]> {
+  const apiKey = process.env.SERPER_API_KEY;
+  if (!apiKey) return [];
+
+  try {
+    const response = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ q: query, num: 5 }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) return [];
+
+    const json: { organic?: { title: string; snippet: string; link: string }[] } =
+      await response.json();
+
+    return (json.organic ?? []).map((item) => ({
+      title: item.title,
+      snippet: item.snippet,
+      link: item.link,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 async function googleCustomSearch(query: string): Promise<SearchResult[]> {
@@ -59,27 +138,22 @@ async function googleCustomSearch(query: string): Promise<SearchResult[]> {
     );
 
     if (!response.ok) {
-      if (response.status === 429 || response.status === 403) {
-        // 403 = quota exceeded or API key issue, 429 = rate limited
-        // Both are non-fatal, just skip search
-        return [];
-      }
-      console.warn(`[search] Google Search error: ${response.status}`);
+      const errorBody = await response.text().catch(() => "unable to read body");
+      console.error(`[search] Google Custom Search ${response.status}: ${errorBody}`);
       return [];
     }
 
-    const json = await response.json();
-    const items = json.items || [];
+    const json: { items?: { title: string; snippet: string; link: string }[] } =
+      await response.json();
 
-    return items.map(
-      (item: { title: string; snippet: string; link: string }) => ({
-        title: item.title,
-        snippet: item.snippet,
-        link: item.link,
-      }),
-    );
-  } catch {
-    // Search is non-critical, silently return empty
+    console.log(`[search] Google Custom Search returned ${json.items?.length ?? 0} items`);
+    return (json.items ?? []).map((item) => ({
+      title: item.title,
+      snippet: item.snippet,
+      link: item.link,
+    }));
+  } catch (error) {
+    console.error(`[search] Google Custom Search exception:`, error instanceof Error ? error.message : error);
     return [];
   }
 }
