@@ -16,68 +16,82 @@ export function createEnrichmentWorker(
         `[worker] Processing job ${job.id} for ${shop} (trigger: ${triggeredBy})`,
       );
 
-      // Get app config for this shop (use sensible defaults if none)
-      const config = await prisma.appConfig.findUnique({
-        where: { shop },
-      });
+      // Extend lock periodically to prevent stalled job detection on long runs (25K+ products)
+      const LOCK_EXTEND_INTERVAL = 60000; // Extend lock every 60 seconds
+      const lockExtender = setInterval(async () => {
+        try {
+          await job.extendLock(job.token!, 600000); // Extend by 10 more minutes
+        } catch {
+          // Lock extension can fail if job already completed - ignore
+        }
+      }, LOCK_EXTEND_INTERVAL);
 
-      // Always auto-apply: override config to ensure products get applied automatically
-      const autoApply = true;
-      const minConfidence = config?.minConfidenceScore ?? 0.5;
-      const maxProductsConfig = config?.maxProductsPerRun ?? 50;
-
-      // Get offline session for Shopify API access (online sessions expire quickly)
-      const session = await prisma.session.findFirst({
-        where: { shop, isOnline: false },
-      });
-
-      if (!session?.accessToken) {
-        // Log what sessions exist for debugging
-        const allSessions = await prisma.session.findMany({
+      try {
+        // Get app config for this shop (use sensible defaults if none)
+        const config = await prisma.appConfig.findUnique({
           where: { shop },
-          select: { id: true, isOnline: true, scope: true, expires: true },
         });
-        console.error(
-          `[worker] No offline session for ${shop}. All sessions:`,
-          JSON.stringify(allSessions),
+
+        // Always auto-apply: override config to ensure products get applied automatically
+        const autoApply = true;
+        const minConfidence = config?.minConfidenceScore ?? 0.5;
+        const maxProductsConfig = config?.maxProductsPerRun ?? 50;
+
+        // Get offline session for Shopify API access (online sessions expire quickly)
+        const session = await prisma.session.findFirst({
+          where: { shop, isOnline: false },
+        });
+
+        if (!session?.accessToken) {
+          // Log what sessions exist for debugging
+          const allSessions = await prisma.session.findMany({
+            where: { shop },
+            select: { id: true, isOnline: true, scope: true, expires: true },
+          });
+          console.error(
+            `[worker] No offline session for ${shop}. All sessions:`,
+            JSON.stringify(allSessions),
+          );
+          throw new Error(`No valid offline session for shop: ${shop}`);
+        }
+
+        console.log(
+          `[worker] Found session ${session.id}, isOnline: ${session.isOnline}, scope: ${session.scope?.slice(0, 50)}`,
         );
-        throw new Error(`No valid offline session for shop: ${shop}`);
+
+        // Dynamic import to avoid bundling issues in worker context
+        const { createAdminApiContext } = await import(
+          "./worker-admin.server"
+        );
+        // Cast to expected type - worker admin context provides the same graphql interface
+        const admin = createAdminApiContext(shop, session.accessToken) as unknown as AdminApiContext;
+
+        const { runEnrichmentPipeline } = await import(
+          "../enrichment/pipeline.server"
+        );
+
+        const result = await runEnrichmentPipeline(admin, {
+          shop,
+          triggeredBy: triggeredBy as "CRON" | "MANUAL" | "WEBHOOK",
+          maxProducts: maxProducts ?? maxProductsConfig,
+          autoApply,
+          minConfidence,
+          productId: productId ?? undefined,
+        });
+
+        console.log(
+          `[worker] Job ${job.id} complete: ${result.enrichedCount} enriched, ${result.failedCount} failed, ${result.skippedCount} skipped`,
+        );
+
+        return result;
+      } finally {
+        clearInterval(lockExtender);
       }
-
-      console.log(
-        `[worker] Found session ${session.id}, isOnline: ${session.isOnline}, scope: ${session.scope?.slice(0, 50)}`,
-      );
-
-      // Dynamic import to avoid bundling issues in worker context
-      const { createAdminApiContext } = await import(
-        "./worker-admin.server"
-      );
-      // Cast to expected type - worker admin context provides the same graphql interface
-      const admin = createAdminApiContext(shop, session.accessToken) as unknown as AdminApiContext;
-
-      const { runEnrichmentPipeline } = await import(
-        "../enrichment/pipeline.server"
-      );
-
-      const result = await runEnrichmentPipeline(admin, {
-        shop,
-        triggeredBy: triggeredBy as "CRON" | "MANUAL" | "WEBHOOK",
-        maxProducts: maxProducts ?? maxProductsConfig,
-        autoApply,
-        minConfidence,
-        productId: productId ?? undefined,
-      });
-
-      console.log(
-        `[worker] Job ${job.id} complete: ${result.enrichedCount} enriched, ${result.failedCount} failed, ${result.skippedCount} skipped`,
-      );
-
-      return result;
     },
     {
       connection: getRedis(),
       concurrency,
-      lockDuration: 600000, // 10 minutes - processing 50 products takes several minutes
+      lockDuration: 600000, // 10 minutes initial lock (extended by heartbeat during processing)
       stalledInterval: 300000, // Check stalled every 5 minutes (must be < lockDuration)
       limiter: {
         max: 10,

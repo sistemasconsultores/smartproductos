@@ -44,7 +44,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const url = new URL(request.url);
   const rawMax = Number(url.searchParams.get("max"));
   const maxProducts =
-    Number.isFinite(rawMax) && rawMax >= 1 && rawMax <= 10000
+    Number.isFinite(rawMax) && rawMax >= 1 && rawMax <= 30000
       ? Math.round(rawMax)
       : 50;
 
