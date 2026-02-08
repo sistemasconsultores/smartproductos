@@ -236,6 +236,9 @@ async function processProduct(
     autoApply && enrichment.confidence_score >= minConfidence;
 
   if (shouldAutoApply) {
+    console.log(
+      `[pipeline] Auto-applying ${product.id} (confidence: ${enrichment.confidence_score}, threshold: ${minConfidence})`,
+    );
     const result = await applyEnrichment(
       admin,
       product.id,

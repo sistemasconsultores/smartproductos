@@ -18,14 +18,14 @@ export function createEnrichmentWorker(
         `[worker] Processing job ${job.id} for ${shop} (trigger: ${triggeredBy})`,
       );
 
-      // Get app config for this shop
+      // Get app config for this shop (use sensible defaults if none)
       const config = await prisma.appConfig.findUnique({
         where: { shop },
       });
 
-      if (!config) {
-        throw new Error(`No config found for shop: ${shop}`);
-      }
+      const autoApply = config?.autoApply ?? true;
+      const minConfidence = config?.minConfidenceScore ?? 0.7;
+      const maxProductsConfig = config?.maxProductsPerRun ?? 50;
 
       // Get offline session for Shopify API access (online sessions expire quickly)
       const session = await prisma.session.findFirst({
@@ -63,9 +63,9 @@ export function createEnrichmentWorker(
       const result = await runEnrichmentPipeline(admin, {
         shop,
         triggeredBy: triggeredBy as "CRON" | "MANUAL" | "WEBHOOK",
-        maxProducts: maxProducts ?? config.maxProductsPerRun,
-        autoApply: config.autoApply,
-        minConfidence: config.minConfidenceScore,
+        maxProducts: maxProducts ?? maxProductsConfig,
+        autoApply,
+        minConfidence,
         productId: productId ?? undefined,
       });
 
