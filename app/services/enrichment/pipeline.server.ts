@@ -275,14 +275,16 @@ async function processProduct(
     return "skipped";
   }
 
-  // Step 3: Search external data (barcode lookup removed - barcodes are provider references, not UPCs)
+  // Step 3: Search external data (title as primary, SKU/barcode as provider code auxiliaries)
   const firstVariant = product.variants.edges[0]?.node;
   const sku = firstVariant?.sku || null;
+  const barcode = firstVariant?.barcode || null;
 
   const searchResults = await searchBySkuOrTitle(
     sku,
     product.title,
     product.vendor,
+    barcode,
   );
 
   // Search for images if needed

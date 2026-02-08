@@ -19,7 +19,7 @@ SmartEnrich es una Shopify Custom App embebida que enriquece automaticamente los
 - Base de datos: PostgreSQL (existente en Docker) + Prisma ORM
 - Cola de tareas: BullMQ + Redis (existente en Docker)
 - IA: Google Gemini 2.5 Flash API
-- APIs externas: Go-UPC, UPCitemdb, Google Custom Search
+- APIs externas: Serper.dev (busqueda web + imagenes), SerpAPI (fallback)
 - UI: Shopify Polaris React + App Bridge
 - Deployment: Docker Swarm via Portainer en VPS Hostinger (Ubuntu 22.04, 4 CPU, 16GB RAM)
 - Reverse Proxy: Traefik (existente) con SSL automatico Let's Encrypt
@@ -33,7 +33,7 @@ Lee estos documentos ANTES de empezar a codear:
 - docs/DEPLOYMENT.md - Docker, compose, Dockerfile, pasos de deploy
 - docs/GEMINI-PROMPTS.md - Prompts para Gemini, formato respuesta, validacion
 - docs/SHOPIFY-API.md - Queries GraphQL, mutations, metafields, webhooks
-- docs/API-INTEGRATIONS.md - Go-UPC, UPCitemdb, Google Custom Search
+- docs/API-INTEGRATIONS.md - Serper.dev, SerpAPI, Gemini
 
 ## Estructura del Proyecto
 
@@ -64,9 +64,8 @@ smartproductos/
 |   |   |-- enrichment/
 |   |   |   |-- pipeline.server.ts (Orquestador principal)
 |   |   |   |-- analyzer.server.ts (Score completitud 0-100)
-|   |   |   |-- barcode-lookup.server.ts (Go-UPC, UPCitemdb)
-|   |   |   |-- web-search.server.ts (Google Custom Search)
-|   |   |   |-- image-search.server.ts (Busqueda imagenes)
+|   |   |   |-- web-search.server.ts (Serper + SerpAPI)
+|   |   |   |-- image-search.server.ts (Serper imagenes)
 |   |   |   |-- gemini.server.ts (Google Gemini API)
 |   |   |   |-- shopify-updater.server.ts (Mutations GraphQL)
 |   |   |   |-- image-cache.server.ts (MinIO cache)
@@ -102,7 +101,7 @@ SmartEnrich JAMAS debe:
 
 1. Fetch: Productos activos via GraphQL (paginacion cursor-based)
 2. Analyze: Score completitud 0-100
-3. Search: Barcode (Go-UPC, UPCitemdb) + SKU/titulo (Google Custom Search)
+3. Search: SKU/titulo (Serper.dev / SerpAPI) + imagenes (Serper Images)
 4. AI Process: Gemini 2.5 Flash genera descripcion SEO, metafields, tags, categoria
 5. Validate: JSON (confidence > 0.7, sin precios, HTML limpio)
 6. Apply: Actualizar Shopify o guardar para aprobacion

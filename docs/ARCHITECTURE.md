@@ -54,11 +54,11 @@ SmartEnrich es una aplicación de Shopify diseñada para automatizar el enriquec
            ▼                 ▼                    ▼
 ┌──────────────────┐ ┌───────────────┐ ┌──────────────────────┐
 │  Shopify Admin   │ │ Google Gemini │ │  APIs Externas        │
-│  API (GraphQL)   │ │ API           │ │  - Barcode Lookup     │
-│  - Products      │ │ (2.5 Flash)   │ │  - Go-UPC             │
-│  - Metafields    │ │               │ │  - UPCitemdb           │
-│  - Images        │ │               │ │  - Google Custom Search│
-│  - Collections   │ │               │ │  - SerpAPI (imágenes)  │
+│  API (GraphQL)   │ │ API           │ │  - Serper.dev (web)   │
+│  - Products      │ │ (2.5 Flash)   │ │  - Serper.dev (images)│
+│  - Metafields    │ │               │ │  - SerpAPI (fallback) │
+│  - Images        │ │               │ │                       │
+│  - Collections   │ │               │ │                       │
 └──────────────────┘ └───────────────┘ └──────────────────────┘
 ```
 
@@ -75,7 +75,7 @@ SmartEnrich es una aplicación de Shopify diseñada para automatizar el enriquec
 | Cola de tareas | BullMQ + Redis | Procesamiento async de productos |
 | Cron/Scheduler | node-cron o Shopify Flow | Ejecución diaria programada |
 | Barcode API | Go-UPC + Barcode Lookup + UPCitemdb | Cobertura global de códigos de barras |
-| Búsqueda web | Google Custom Search API o SerpAPI | Encontrar info e imágenes de productos |
+| Búsqueda web | Serper.dev (primario) + SerpAPI (fallback) | Encontrar info e imágenes de productos |
 | UI | Polaris (React) + App Bridge | Consistente con el admin de Shopify |
 | Hosting | Fly.io / Railway / Render / Heroku | Recomendados por Shopify |
 
@@ -119,8 +119,8 @@ model AppConfig {
   geminiApiKey          String?  // Clave API de Google Gemini
   barcodeLookupApiKey   String?  // Clave API de Barcode Lookup
   goUpcApiKey           String?  // Clave API de Go-UPC
-  googleSearchApiKey    String?  // Google Custom Search API key
-  googleSearchCx        String?  // Google Custom Search Engine ID
+  serperApiKey          String?  // Serper.dev API key (busqueda web + imagenes)
+  serpApiKey             String?  // SerpAPI key (fallback)
   cronEnabled           Boolean  @default(true)
   cronTime              String   @default("02:00") // Hora de ejecución diaria (CST)
   autoApplyChanges      Boolean  @default(false) // true=aplica auto, false=requiere aprobación
@@ -331,9 +331,9 @@ async function searchByBarcode(barcode: string): Promise<ProductData> {
 
 // 3b. Búsqueda por SKU en la web
 async function searchBySKU(sku: string, title: string): Promise<WebSearchResult> {
-  // Google Custom Search con SKU + marca del título
+  // Serper.dev con SKU + marca del título
   const query = `${sku} ${extractBrand(title)} specifications`;
-  const results = await googleCustomSearch(query);
+  const results = await serperSearch(query);
   return results;
 }
 
@@ -345,7 +345,7 @@ async function searchProductImages(
 ): Promise<ImageResult[]> {
   // Buscar imágenes oficiales del producto
   const query = `${title} ${sku} product photo official`;
-  const images = await googleImageSearch(query);
+  const images = await serperImageSearch(query);
   
   // Filtrar por calidad mínima (1024x1024)
   return images.filter(img => img.width >= 1024 && img.height >= 1024);
@@ -661,9 +661,9 @@ scopes = "read_products,write_products,read_product_listings,read_inventory,writ
 - **Plans**: Desde $10/mes (1,000 lookups) hasta $99/mes (50,000 lookups)
 - **Datos**: Nombre, marca, categoría, descripción, imágenes
 
-### Google Custom Search API
-- **Costo**: Gratis hasta 100 queries/día, luego $5 por 1000 queries
-- **Uso**: Búsqueda de imágenes y especificaciones por SKU
+### Serper.dev
+- **Costo**: 2,500 gratis, luego $50 por 50,000 búsquedas
+- **Uso**: Búsqueda web y de imágenes por SKU/título (primario)
 
 ### Alternativa gratuita: UPCitemdb
 - **Free tier**: 100 requests/día
@@ -700,7 +700,7 @@ scopes = "read_products,write_products,read_product_listings,read_inventory,writ
 ### Fase 2: Pipeline de Enriquecimiento (Semana 3-4)
 - [ ] Implementar análisis de completitud
 - [ ] Integrar APIs de barcode lookup (Go-UPC + Barcode Lookup)
-- [ ] Integrar Google Custom Search para SKU
+- [ ] Integrar Serper.dev para búsqueda web + imágenes
 - [ ] Integrar Google Gemini para generación de descripciones
 - [ ] Implementar lógica de actualización de productos (sin tocar precios)
 

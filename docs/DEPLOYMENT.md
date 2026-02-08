@@ -190,15 +190,9 @@ REDIS_URL=redis://redis_redis:6379/3
 GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 GEMINI_MODEL=gemini-2.5-flash
 
-# --- Busqueda Web (cadena de fallback: SerpAPI -> Serper -> Google) ---
-SERPAPI_KEY=                    # Opcional: SerpAPI (primario)
-SERPER_API_KEY=                # Opcional: Serper.dev (secundario)
-GOOGLE_SEARCH_API_KEY=AIzaSyXXXXXX  # Google Custom Search (fallback)
-GOOGLE_SEARCH_CX=13f8a1b6e5c824b62
-
-# --- Barcode APIs ---
-GO_UPC_API_KEY=
-BARCODE_LOOKUP_API_KEY=
+# --- Busqueda Web (Serper.dev primario, SerpAPI fallback) ---
+SERPER_API_KEY=                # Primario: https://serper.dev (2500 gratis, luego $50/50000)
+SERPAPI_KEY=                   # Fallback: https://serpapi.com ($50/mes 5000 busquedas)
 
 # --- MinIO ---
 MINIO_ENDPOINT=minio
@@ -373,13 +367,12 @@ docker service update --force smartenrich_app
 **Causa**: El worker no tiene el adapter de Node.js para el SDK de Shopify.
 **Solucion**: `worker/index.ts` debe tener `import "@shopify/shopify-app-remix/adapters/node"` como primer import.
 
-### Error: Google Custom Search 403
-**Causa**: API key sin permisos o Custom Search API no habilitada.
+### Error: Serper 401/403
+**Causa**: API key invalida o creditos agotados.
 **Verificar**:
-1. Google Cloud Console -> APIs & Services -> Library -> Custom Search JSON API (debe estar habilitada)
-2. Credentials -> verificar que la API key no tenga restricciones que bloqueen Custom Search
-3. Los logs del worker muestran el body exacto del 403
-**Alternativa**: Configurar `SERPAPI_KEY` o `SERPER_API_KEY` como fallback.
+1. https://serper.dev/api-keys - verificar que la key es correcta
+2. https://serper.dev/dashboard - verificar creditos disponibles
+3. Los logs del worker muestran el body exacto del error
 
 ### Productos no se procesan (0 new to process)
 **Causa**: Ya existen logs APPLIED o PENDING para esos productos.
@@ -410,11 +403,9 @@ O cambiar status a FAILED para que se re-procesen.
 |---|---|---|
 | VPS Hostinger (KVM 4) | Ya pagado | $0 adicional |
 | Google Gemini 2.5 Flash | Paid tier (~$2/mes uso actual) | ~$2-5/mes |
-| Google Custom Search | 100 gratis/dia, luego $5/1000 | ~$0-5/mes |
-| SerpAPI (opcional) | 100 gratis/mes, luego $50/5000 | $0-50/mes |
-| Serper.dev (opcional) | $50 por 50,000 busquedas | $0-50/mes |
-| Go-UPC (opcional) | Basic 1,000 lookups | ~$10/mes |
-| **Total** | | **$2-120/mes** |
+| Serper.dev | 2,500 gratis, luego $50/50,000 | $0-50/mes |
+| SerpAPI (fallback) | 100 gratis/mes, luego $50/5,000 | $0-50/mes |
+| **Total** | | **$2-55/mes** |
 
 Para ~100 productos activos procesados 1x/dia, los tiers gratuitos son suficientes.
 
