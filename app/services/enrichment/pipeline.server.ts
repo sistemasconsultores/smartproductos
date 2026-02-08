@@ -83,7 +83,7 @@ export async function runEnrichmentPipeline(
       );
     }
 
-    // Process each product
+    // Process each product (update run counts after each one for real-time progress)
     for (const product of products) {
       try {
         const result = await processProduct(
@@ -119,6 +119,12 @@ export async function runEnrichmentPipeline(
           },
         });
       }
+
+      // Update run counts in DB after each product so dashboard shows real-time progress
+      await prisma.enrichmentRun.update({
+        where: { id: run.id },
+        data: { enrichedCount, failedCount, skippedCount },
+      });
     }
 
     // Complete run
