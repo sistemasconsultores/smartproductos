@@ -13,9 +13,11 @@ import {
   Divider,
   Box,
 } from "@shopify/polaris";
+import type { Prisma } from "@prisma/client";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import type { GeminiEnrichmentResponse } from "../services/enrichment/gemini.server";
+import { applyEnrichment } from "../services/enrichment/shopify-updater.server";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -33,7 +35,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
   const logId = params.id;
@@ -42,23 +44,60 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return json({ error: "ID requerido" }, { status: 400 });
   }
 
-  // Forward to the approve API
-  const response = await fetch(
-    new URL("/api/approve", request.url).toString(),
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: request.headers.get("Cookie") || "",
-      },
-      body: JSON.stringify({
-        logId,
-        action: intent === "approve" ? "approve" : "reject",
-      }),
-    },
+  const log = await prisma.enrichmentLog.findUnique({
+    where: { id: logId },
+  });
+
+  if (!log || log.shop !== session.shop) {
+    return json({ error: "No encontrado" }, { status: 404 });
+  }
+
+  if (log.status !== "PENDING") {
+    return json({ error: `No se puede procesar un log con estado: ${log.status}` }, { status: 400 });
+  }
+
+  if (intent === "reject") {
+    await prisma.enrichmentLog.update({
+      where: { id: logId },
+      data: { status: "REJECTED" },
+    });
+    return json({ success: true, status: "REJECTED" });
+  }
+
+  // Apply the proposed changes
+  const enrichment = log.proposedChanges as unknown as GeminiEnrichmentResponse;
+  if (!enrichment) {
+    return json({ error: "No hay cambios propuestos" }, { status: 400 });
+  }
+
+  const result = await applyEnrichment(
+    admin,
+    log.shopifyProductId,
+    enrichment,
   );
 
-  return response;
+  if (result.errors.length > 0) {
+    await prisma.enrichmentLog.update({
+      where: { id: logId },
+      data: {
+        status: "FAILED",
+        errorMessage: result.errors.join("; "),
+      },
+    });
+    return json({ success: false, errors: result.errors });
+  }
+
+  await prisma.enrichmentLog.update({
+    where: { id: logId },
+    data: {
+      status: "APPLIED",
+      appliedChanges: enrichment as unknown as Prisma.InputJsonValue,
+      approvedAt: new Date(),
+      appliedAt: new Date(),
+    },
+  });
+
+  return json({ success: true, status: "APPLIED" });
 };
 
 export default function ProductDetail() {
