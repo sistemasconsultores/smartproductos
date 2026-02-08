@@ -17,14 +17,23 @@ type SearchProvider = (query: string) => Promise<SearchResult[]>;
 /** Search providers in priority order: Serper (primary), SerpAPI (fallback) */
 const providers: SearchProvider[] = [serperSearch, serpApiSearch];
 
+/**
+ * Builds the search query using the product title (always) since SKUs in this store
+ * are internal provider codes (FRCFC0163, FBE0308, etc.) that don't exist on the web.
+ * The title contains the actual product name (e.g. "Samsung Galaxy S25 Ultra").
+ */
 export async function searchBySkuOrTitle(
-  sku: string | null,
+  _sku: string | null,
   title: string,
   brand: string,
 ): Promise<SearchResult[]> {
-  const query = sku
-    ? `${sku} ${brand} specifications ficha tecnica`
-    : `${title} ${brand} ficha tecnica especificaciones`;
+  // Clean title: remove common prefixes like "(CAJA ABIERTA)", "Repuesto", etc.
+  const cleanTitle = title
+    .replace(/^\(.*?\)\s*/g, "")
+    .replace(/^Repuesto\s+/i, "")
+    .trim();
+
+  const query = `${cleanTitle} ${brand} ficha tecnica especificaciones`;
 
   const hash = md5(query);
   const cached = await getCachedData(cacheKey("search", hash));
