@@ -218,7 +218,17 @@ export async function fetchSingleProduct(
     );
   }
 
-  return data.product ?? null;
+  const product = data.product ?? null;
+
+  // Only return active products - skip draft and archived
+  if (product && product.status !== "ACTIVE") {
+    console.log(
+      `[queries] Skipping product ${product.id} (status: ${product.status})`,
+    );
+    return null;
+  }
+
+  return product;
 }
 
 export async function fetchAllActiveProducts(
@@ -236,7 +246,14 @@ export async function fetchAllActiveProducts(
       "status:active",
     );
 
-    allProducts.push(...products);
+    // Double-check: only include products with ACTIVE status
+    const activeOnly = products.filter((p) => p.status === "ACTIVE");
+    if (activeOnly.length < products.length) {
+      console.log(
+        `[queries] Filtered out ${products.length - activeOnly.length} non-active products`,
+      );
+    }
+    allProducts.push(...activeOnly);
     hasNextPage = pageInfo.hasNextPage;
     cursor = pageInfo.endCursor ?? undefined;
   }
