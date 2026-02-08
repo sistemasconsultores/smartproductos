@@ -5,10 +5,6 @@ import {
   cacheKey,
   SEARCH_CACHE_TTL,
 } from "../redis.server";
-import {
-  googleSearchDisabledUntil,
-  setGoogleSearchDisabled,
-} from "./web-search.server";
 
 export interface ImageResult {
   url: string;
@@ -30,7 +26,7 @@ export async function searchProductImages(
     return JSON.parse(cached) as ImageResult[];
   }
 
-  const results = await googleImageSearch(query);
+  const results = await serperImageSearch(query);
 
   // Filter for minimum quality: 1024x1024
   const filtered = results.filter(
@@ -48,58 +44,47 @@ export async function searchProductImages(
   return filtered;
 }
 
-async function googleImageSearch(query: string): Promise<ImageResult[]> {
-  const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-  const cx = process.env.GOOGLE_SEARCH_CX;
-  if (!apiKey || !cx) return [];
-
-  // Share circuit breaker with web-search (same Google API key and quota)
-  if (Date.now() < googleSearchDisabledUntil) {
-    return [];
-  }
+async function serperImageSearch(query: string): Promise<ImageResult[]> {
+  const apiKey = process.env.SERPER_API_KEY;
+  if (!apiKey) return [];
 
   try {
-    const params = new URLSearchParams({
-      key: apiKey,
-      cx,
-      q: query,
-      searchType: "image",
-      imgSize: "xlarge",
-      num: "5",
+    const response = await fetch("https://google.serper.dev/images", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ q: query, num: 10 }),
+      signal: AbortSignal.timeout(10000),
     });
 
-    const response = await fetch(
-      `https://www.googleapis.com/customsearch/v1?${params}`,
-      { signal: AbortSignal.timeout(10000) },
-    );
-
     if (!response.ok) {
-      if (response.status === 403 || response.status === 429) {
-        setGoogleSearchDisabled(Date.now() + 3600000);
-        console.warn(
-          `[images] Google Image Search ${response.status} — disabled for 1 hour`,
-        );
-      }
+      const errorBody = await response.text().catch(() => "unable to read body");
+      console.error(`[images] Serper Images ${response.status}: ${errorBody}`);
       return [];
     }
 
-    const json = await response.json();
-    const items = json.items || [];
-
-    return items.map(
-      (item: {
-        link: string;
-        image: { width: number; height: number };
+    const json: {
+      images?: {
         title: string;
-      }) => ({
-        url: item.link,
-        width: item.image?.width || 0,
-        height: item.image?.height || 0,
-        title: item.title || "",
-      }),
-    );
+        imageUrl: string;
+        imageWidth: number;
+        imageHeight: number;
+      }[];
+    } = await response.json();
+
+    const images = json.images ?? [];
+    console.log(`[images] Serper returned ${images.length} images`);
+
+    return images.map((item) => ({
+      url: item.imageUrl,
+      width: item.imageWidth || 0,
+      height: item.imageHeight || 0,
+      title: item.title || "",
+    }));
   } catch (error) {
-    console.error("[images] Google Image Search failed:", error);
+    console.error(`[images] Serper exception:`, error instanceof Error ? error.message : error);
     return [];
   }
 }

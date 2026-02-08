@@ -5,7 +5,7 @@ Shopify Custom App embebida que enriquece automaticamente productos de la tienda
 ## Que Hace
 
 - Analiza productos activos de Shopify (score de completitud 0-100)
-- Busca informacion por barcode (Go-UPC, UPCitemdb) y por SKU/titulo (SerpAPI, Serper.dev, Google Custom Search)
+- Busca informacion por SKU/titulo (Serper.dev, SerpAPI) e imagenes de productos
 - Genera descripciones SEO en espanol costarricense con Google Gemini 2.5 Flash
 - Completa metafields tecnicos (color, dimensiones, modelo, numero de parte, peso, etc.)
 - Asigna categorias, tipos de producto y tags automaticamente
@@ -22,8 +22,7 @@ Shopify Custom App embebida que enriquece automaticamente productos de la tienda
 | Base de datos | PostgreSQL + Prisma 5.22 |
 | Cola de tareas | BullMQ 5.25 + Redis |
 | IA | Google Gemini 2.5 Flash |
-| Busqueda web | SerpAPI / Serper.dev / Google Custom Search (cadena de fallback) |
-| Barcode | Go-UPC + UPCitemdb |
+| Busqueda web | Serper.dev (primario) / SerpAPI (fallback) |
 | Deployment | Docker Swarm + Portainer |
 | Reverse Proxy | Traefik + Let's Encrypt SSL |
 
@@ -42,7 +41,7 @@ Internet --> Traefik (SSL) --> smartenrich.automasc.com
                        +----------+----------+
                        |          |          |
                     PostgreSQL  Redis    APIs Externas
-                    (smartenrich) (DB 3)  (Gemini, Search, Barcode)
+                    (smartenrich) (DB 3)  (Gemini, Serper)
 ```
 
 **2 servicios Docker** comparten la misma imagen:
@@ -54,7 +53,7 @@ Internet --> Traefik (SSL) --> smartenrich.automasc.com
 1. **Fetch**: Productos activos via Shopify GraphQL (paginacion cursor-based)
 2. **Dedup**: Filtrar productos ya procesados (APPLIED/PENDING en DB)
 3. **Analyze**: Score de completitud 0-100 (descripcion, imagenes, metafields, SEO)
-4. **Search**: Barcode APIs + Web Search (SerpAPI --> Serper --> Google)
+4. **Search**: Web Search (Serper --> SerpAPI) + Image Search (Serper Images)
 5. **AI**: Gemini 2.5 Flash genera descripcion SEO, metafields, tags, categoria
 6. **Apply**: Auto-aplica si confidence >= 0.5, o guarda como PENDING
 
@@ -132,8 +131,8 @@ smartproductos/
     |   |   |-- pipeline.server.ts    # Orquestador principal (6 pasos)
     |   |   |-- analyzer.server.ts    # Score completitud 0-100
     |   |   |-- barcode-lookup.server.ts  # Go-UPC + UPCitemdb
-    |   |   |-- web-search.server.ts  # SerpAPI + Serper.dev + Google
-    |   |   |-- image-search.server.ts    # Busqueda de imagenes
+    |   |   |-- web-search.server.ts  # Serper.dev + SerpAPI
+    |   |   |-- image-search.server.ts    # Serper Images
     |   |   |-- gemini.server.ts      # Google Gemini API + validacion
     |   |   |-- shopify-updater.server.ts # Aplicar cambios en Shopify
     |   |   |-- image-cache.server.ts # MinIO cache
@@ -163,11 +162,8 @@ smartproductos/
 | `DATABASE_URL` | PostgreSQL connection string | Si |
 | `REDIS_URL` | Redis (DB 3) | Si |
 | `GEMINI_API_KEY` | Google Gemini API key | Si |
-| `SERPAPI_KEY` | SerpAPI (busqueda primaria) | Opcional |
-| `SERPER_API_KEY` | Serper.dev (busqueda secundaria) | Opcional |
-| `GOOGLE_SEARCH_API_KEY` | Google Custom Search | Opcional |
-| `GOOGLE_SEARCH_CX` | Custom Search Engine ID | Opcional |
-| `GO_UPC_API_KEY` | Go-UPC barcode lookup | Opcional |
+| `SERPER_API_KEY` | Serper.dev (busqueda primaria + imagenes) | Recomendado |
+| `SERPAPI_KEY` | SerpAPI (fallback) | Opcional |
 | `MINIO_*` | MinIO storage config | Opcional |
 
 ## Reglas Criticas

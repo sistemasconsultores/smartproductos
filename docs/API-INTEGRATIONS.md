@@ -1,87 +1,85 @@
 # APIs Externas - SmartEnrich
 
-## 1. Go-UPC (Barcode Lookup Principal)
+## 1. Serper.dev (Busqueda Web - Primario)
 
-URL: https://go-upc.com/api/v1/code/{barcode}
-Auth: Header Authorization: Bearer {API_KEY}
-Precio: $10-$99/mes
+URL: https://google.serper.dev/search
+Auth: Header X-API-KEY
+Precio: 2,500 gratis, luego $50/50,000 busquedas
 
-Request:
+### Busqueda web:
 ```
-GET https://go-upc.com/api/v1/code/0196802498302
-Authorization: Bearer GO_UPC_API_KEY
-```
+POST https://google.serper.dev/search
+X-API-KEY: SERPER_API_KEY
+Content-Type: application/json
 
-Response:
-```json
-{
-  "code": "0196802498302",
-  "codeType": "UPC-A",
-  "product": {
-    "name": "Lenovo ThinkPad T14 Gen 4",
-    "description": "14-inch business laptop...",
-    "imageUrl": "https://...",
-    "brand": "Lenovo",
-    "category": "Electronics > Computers > Laptops",
-    "specs": { "Weight": "1.21 kg", "Dimensions": "317.7 x 226.9 x 17.9 mm" }
-  }
-}
-```
-
----
-
-## 2. UPCitemdb (Barcode Lookup Backup)
-
-URL: https://api.upcitemdb.com/prod/trial/lookup
-Auth: Sin auth para trial (100 req/dia)
-
-Request:
-```
-GET https://api.upcitemdb.com/prod/trial/lookup?upc=0196802498302
+{"q": "Lenovo ThinkPad specifications ficha tecnica", "num": 5}
 ```
 
 Response:
 ```json
 {
-  "items": [{
-    "title": "Lenovo ThinkPad T14 Gen 4",
-    "description": "...",
-    "brand": "Lenovo",
-    "model": "21HD00LXUS",
-    "dimension": "12.44 x 8.94 x 0.70 inches",
-    "weight": "2.67 lb",
-    "images": ["https://..."]
-  }]
+  "organic": [
+    {
+      "title": "Lenovo ThinkPad T14 Gen 4 Specs",
+      "snippet": "14-inch business laptop with...",
+      "link": "https://www.notebookcheck.net/..."
+    }
+  ]
+}
+```
+
+### Busqueda de imagenes:
+```
+POST https://google.serper.dev/images
+X-API-KEY: SERPER_API_KEY
+Content-Type: application/json
+
+{"q": "Lenovo ThinkPad product photo official", "num": 10}
+```
+
+Response:
+```json
+{
+  "images": [
+    {
+      "title": "Lenovo ThinkPad T14",
+      "imageUrl": "https://...",
+      "imageWidth": 2048,
+      "imageHeight": 2048
+    }
+  ]
 }
 ```
 
 ---
 
-## 3. Google Custom Search
+## 2. SerpAPI (Busqueda Web - Fallback)
 
-URL: https://www.googleapis.com/customsearch/v1
-Auth: Query param key={API_KEY}
-Precio: 100/dia gratis, luego $5/1000
+URL: https://serpapi.com/search.json
+Auth: Query param api_key
+Precio: $50/mes por 5,000 busquedas
 
-Setup:
-1. Crear Search Engine en programmablesearchengine.google.com
-2. Buscar en toda la web
-3. Habilitar Image Search
-4. Obtener CX y API Key
-
-Request texto:
+Request:
 ```
-GET https://www.googleapis.com/customsearch/v1?key=KEY&cx=CX&q=Lenovo+ThinkPad+specifications&num=5
+GET https://serpapi.com/search.json?engine=google&q=Lenovo+ThinkPad+specifications&api_key=KEY&num=5
 ```
 
-Request imagenes:
-```
-GET https://www.googleapis.com/customsearch/v1?key=KEY&cx=CX&q=Lenovo+ThinkPad&searchType=image&imgSize=xlarge&num=5
+Response:
+```json
+{
+  "organic_results": [
+    {
+      "title": "Lenovo ThinkPad T14 Gen 4 Specs",
+      "snippet": "14-inch business laptop...",
+      "link": "https://..."
+    }
+  ]
+}
 ```
 
 ---
 
-## 4. Google Gemini 2.5 Flash
+## 3. Google Gemini 2.5 Flash
 
 Ver docs/GEMINI-PROMPTS.md
 
@@ -89,16 +87,15 @@ Ver docs/GEMINI-PROMPTS.md
 
 ## Estrategia de Busqueda
 
-1. Si tiene barcode: Go-UPC -> UPCitemdb -> Cache Redis 30 dias
-2. Si tiene SKU: Google Search "{sku} specifications" -> Cache 7 dias
-3. Siempre: Google Search "{titulo} {marca} ficha tecnica" -> Cache 7 dias
-4. Si faltan imagenes: Google Images "{titulo} {marca}" -> Filtrar >= 800x800 -> MinIO
+1. Si tiene SKU: Serper Search "{sku} {marca} specifications ficha tecnica" -> Cache 7 dias
+2. Si no tiene SKU: Serper Search "{titulo} {marca} ficha tecnica especificaciones" -> Cache 7 dias
+3. Si faltan imagenes: Serper Images "{titulo} {marca} product photo official" -> Filtrar >= 1024x1024 -> MinIO
+4. Fallback: Si Serper falla, SerpAPI busca lo mismo automaticamente
 
 ## Caching Redis
 
 ```typescript
 const CACHE_KEYS = {
-  barcode: (code: string) => `cache:barcode:${code}`,      // TTL: 30 dias
   search: (query: string) => `cache:search:${md5(query)}`, // TTL: 7 dias
   images: (query: string) => `cache:images:${md5(query)}`, // TTL: 7 dias
 };
@@ -108,10 +105,9 @@ const CACHE_KEYS = {
 
 | API | Error | Accion |
 |---|---|---|
-| Go-UPC | 404 | Intentar UPCitemdb |
-| Go-UPC | 429 | Esperar y reintentar |
-| UPCitemdb | Empty | Continuar sin barcode data |
-| Google Search | 429 | Continuar sin search data |
+| Serper | 401 | Verificar API key en serper.dev |
+| Serper | 429 | Creditos agotados, pasa a SerpAPI |
+| SerpAPI | 401/429 | Continuar sin search data |
 | Gemini | 429 | Retry backoff (2s, 4s, 8s, 16s) |
 | Gemini | 500 | Retry hasta 3 veces |
 | Gemini | Invalid JSON | Marcar como fallido |

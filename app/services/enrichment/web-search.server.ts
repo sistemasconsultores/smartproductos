@@ -14,15 +14,8 @@ export interface SearchResult {
 
 type SearchProvider = (query: string) => Promise<SearchResult[]>;
 
-const providers: SearchProvider[] = [serpApiSearch, serperSearch, googleCustomSearch];
-
-// Circuit breaker: disable Google Search after quota exhaustion (403) to avoid wasting time
-// Exported so image-search can check the same quota state (shared Google API key)
-export let googleSearchDisabledUntil = 0;
-
-export function setGoogleSearchDisabled(until: number): void {
-  googleSearchDisabledUntil = until;
-}
+/** Search providers in priority order: Serper (primary), SerpAPI (fallback) */
+const providers: SearchProvider[] = [serperSearch, serpApiSearch];
 
 export async function searchBySkuOrTitle(
   sku: string | null,
@@ -39,7 +32,9 @@ export async function searchBySkuOrTitle(
     return JSON.parse(cached) as SearchResult[];
   }
 
-  console.log(`[search] Query: "${query}" | Providers: SERPAPI_KEY=${process.env.SERPAPI_KEY ? "set" : "unset"}, SERPER_API_KEY=${process.env.SERPER_API_KEY ? "set" : "unset"}, GOOGLE_SEARCH_API_KEY=${process.env.GOOGLE_SEARCH_API_KEY ? "set" : "unset"}, GOOGLE_SEARCH_CX=${process.env.GOOGLE_SEARCH_CX ? "set" : "unset"}`);
+  console.log(
+    `[search] Query: "${query}" | Providers: SERPER_API_KEY=${process.env.SERPER_API_KEY ? "set" : "unset"}, SERPAPI_KEY=${process.env.SERPAPI_KEY ? "set" : "unset"}`,
+  );
 
   let results: SearchResult[] = [];
   for (const provider of providers) {
@@ -51,7 +46,7 @@ export async function searchBySkuOrTitle(
   }
 
   if (results.length === 0) {
-    console.log(`[search] All providers returned 0 results for: "${query}"`);
+    console.log(`[search] No results for: "${query}"`);
   }
 
   if (results.length > 0) {
@@ -63,38 +58,6 @@ export async function searchBySkuOrTitle(
   }
 
   return results;
-}
-
-async function serpApiSearch(query: string): Promise<SearchResult[]> {
-  const apiKey = process.env.SERPAPI_KEY;
-  if (!apiKey) return [];
-
-  try {
-    const params = new URLSearchParams({
-      engine: "google",
-      q: query,
-      api_key: apiKey,
-      num: "5",
-    });
-
-    const response = await fetch(
-      `https://serpapi.com/search.json?${params}`,
-      { signal: AbortSignal.timeout(10000) },
-    );
-
-    if (!response.ok) return [];
-
-    const json: { organic_results?: { title: string; snippet: string; link: string }[] } =
-      await response.json();
-
-    return (json.organic_results ?? []).map((item) => ({
-      title: item.title,
-      snippet: item.snippet,
-      link: item.link,
-    }));
-  } catch {
-    return [];
-  }
 }
 
 async function serperSearch(query: string): Promise<SearchResult[]> {
@@ -133,51 +96,40 @@ async function serperSearch(query: string): Promise<SearchResult[]> {
   }
 }
 
-async function googleCustomSearch(query: string): Promise<SearchResult[]> {
-  const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-  const cx = process.env.GOOGLE_SEARCH_CX;
-  if (!apiKey || !cx) return [];
-
-  // Circuit breaker: skip if quota was recently exhausted (403)
-  if (Date.now() < googleSearchDisabledUntil) {
-    return [];
-  }
+async function serpApiSearch(query: string): Promise<SearchResult[]> {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) return [];
 
   try {
     const params = new URLSearchParams({
-      key: apiKey,
-      cx,
+      engine: "google",
       q: query,
+      api_key: apiKey,
       num: "5",
     });
 
     const response = await fetch(
-      `https://www.googleapis.com/customsearch/v1?${params}`,
+      `https://serpapi.com/search.json?${params}`,
       { signal: AbortSignal.timeout(10000) },
     );
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "unable to read body");
-      console.error(`[search] Google Custom Search ${response.status}: ${errorBody}`);
-      if (response.status === 403 || response.status === 429) {
-        // Disable for 1 hour on quota exhaustion
-        googleSearchDisabledUntil = Date.now() + 3600000;
-        console.warn(`[search] Google Custom Search disabled for 1 hour (quota exhausted)`);
-      }
+      console.error(`[search] SerpAPI ${response.status}: ${errorBody}`);
       return [];
     }
 
-    const json: { items?: { title: string; snippet: string; link: string }[] } =
+    const json: { organic_results?: { title: string; snippet: string; link: string }[] } =
       await response.json();
 
-    console.log(`[search] Google Custom Search returned ${json.items?.length ?? 0} items`);
-    return (json.items ?? []).map((item) => ({
+    console.log(`[search] SerpAPI returned ${json.organic_results?.length ?? 0} results`);
+    return (json.organic_results ?? []).map((item) => ({
       title: item.title,
       snippet: item.snippet,
       link: item.link,
     }));
   } catch (error) {
-    console.error(`[search] Google Custom Search exception:`, error instanceof Error ? error.message : error);
+    console.error(`[search] SerpAPI exception:`, error instanceof Error ? error.message : error);
     return [];
   }
 }
