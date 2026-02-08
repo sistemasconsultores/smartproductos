@@ -159,6 +159,14 @@ async function processProduct(
   autoApply: boolean,
   minConfidence: number,
 ): Promise<"enriched" | "skipped" | "failed"> {
+  // Skip non-active products (draft, archived)
+  if (product.status !== "ACTIVE") {
+    console.log(
+      `[pipeline] Skipping non-active product ${product.id} (status: ${product.status})`,
+    );
+    return "skipped";
+  }
+
   // Step 2: Analyze completeness
   const analysis = analyzeCompleteness(product);
 
