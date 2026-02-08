@@ -112,17 +112,23 @@ async function serperSearch(query: string): Promise<SearchResult[]> {
       signal: AbortSignal.timeout(10000),
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "unable to read body");
+      console.error(`[search] Serper ${response.status}: ${errorBody}`);
+      return [];
+    }
 
     const json: { organic?: { title: string; snippet: string; link: string }[] } =
       await response.json();
 
+    console.log(`[search] Serper returned ${json.organic?.length ?? 0} organic results`);
     return (json.organic ?? []).map((item) => ({
       title: item.title,
       snippet: item.snippet,
       link: item.link,
     }));
-  } catch {
+  } catch (error) {
+    console.error(`[search] Serper exception:`, error instanceof Error ? error.message : error);
     return [];
   }
 }
