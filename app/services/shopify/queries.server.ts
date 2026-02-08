@@ -195,7 +195,15 @@ export async function fetchProductsForEnrichment(
   });
 
   const json = await response.json();
-  const data = json.data as ProductsResponse;
+  const data = json.data as ProductsResponse | null;
+
+  if (!data?.products) {
+    const errors = (json as Record<string, unknown>).errors;
+    throw new Error(
+      `Shopify GraphQL query failed: ${JSON.stringify(errors || "No data returned")}`,
+    );
+  }
+
   return {
     products: data.products.edges.map((edge) => edge.node),
     pageInfo: data.products.pageInfo,
@@ -211,7 +219,15 @@ export async function fetchSingleProduct(
   });
 
   const json = await response.json();
-  const data = json.data as { product: ShopifyProduct | null };
+  const data = json.data as { product: ShopifyProduct | null } | null;
+
+  if (!data) {
+    const errors = (json as Record<string, unknown>).errors;
+    throw new Error(
+      `Shopify GraphQL query failed: ${JSON.stringify(errors || "No data returned")}`,
+    );
+  }
+
   return data.product ?? null;
 }
 
