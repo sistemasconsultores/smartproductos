@@ -148,7 +148,7 @@ export async function callGemini(
       temperature: 0.3,
       topP: 0.8,
       topK: 40,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 8192,
       responseMimeType: "application/json",
     },
     safetySettings: [
@@ -218,16 +218,27 @@ export async function callGemini(
       const rawText =
         json.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-      const parsed = JSON.parse(rawText) as GeminiEnrichmentResponse;
+      let parsed: GeminiEnrichmentResponse;
+      try {
+        parsed = JSON.parse(rawText) as GeminiEnrichmentResponse;
+      } catch {
+        // Attempt to repair truncated JSON by closing open strings/objects
+        const repaired = repairTruncatedJson(rawText);
+        if (repaired) {
+          console.warn("[gemini] Repaired truncated JSON response");
+          parsed = repaired as unknown as GeminiEnrichmentResponse;
+        } else {
+          throw new Error(`Gemini returned invalid JSON (${rawText.length} chars): ${rawText.slice(-100)}`);
+        }
+      }
       return { response: parsed, raw: rawText };
     } catch (error) {
       lastError = error as Error;
 
       if (
-        error instanceof SyntaxError &&
-        error.message.includes("JSON")
+        (error as Error).message?.includes("invalid JSON")
       ) {
-        throw new Error(`Gemini returned invalid JSON: ${error.message}`);
+        throw error;
       }
 
       const delay = retryDelays[attempt];
@@ -335,6 +346,42 @@ export function validateGeminiResponse(
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+function repairTruncatedJson(text: string): Record<string, unknown> | null {
+  // Try progressively removing trailing content to find valid JSON
+  let attempt = text.trimEnd();
+
+  // Close any unterminated strings
+  const quoteCount = (attempt.match(/(?<!\\)"/g) || []).length;
+  if (quoteCount % 2 !== 0) {
+    attempt += '"';
+  }
+
+  // Close open arrays and objects
+  const openBrackets: string[] = [];
+  let inString = false;
+  for (let i = 0; i < attempt.length; i++) {
+    const ch = attempt[i];
+    if (ch === '"' && (i === 0 || attempt[i - 1] !== '\\')) {
+      inString = !inString;
+    }
+    if (inString) continue;
+    if (ch === '{') openBrackets.push('}');
+    else if (ch === '[') openBrackets.push(']');
+    else if (ch === '}' || ch === ']') openBrackets.pop();
+  }
+
+  // Remove trailing comma before closing
+  attempt = attempt.replace(/,\s*$/, '');
+  // Close all open brackets
+  attempt += openBrackets.reverse().join('');
+
+  try {
+    return JSON.parse(attempt) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
 function sleep(ms: number): Promise<void> {
