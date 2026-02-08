@@ -59,11 +59,13 @@ async function googleCustomSearch(query: string): Promise<SearchResult[]> {
     );
 
     if (!response.ok) {
-      if (response.status === 429) {
-        console.warn("[search] Google Custom Search rate limited");
+      if (response.status === 429 || response.status === 403) {
+        // 403 = quota exceeded or API key issue, 429 = rate limited
+        // Both are non-fatal, just skip search
         return [];
       }
-      throw new Error(`Google Search error: ${response.status}`);
+      console.warn(`[search] Google Search error: ${response.status}`);
+      return [];
     }
 
     const json = await response.json();
@@ -76,8 +78,8 @@ async function googleCustomSearch(query: string): Promise<SearchResult[]> {
         link: item.link,
       }),
     );
-  } catch (error) {
-    console.error("[search] Google Custom Search failed:", error);
+  } catch {
+    // Search is non-critical, silently return empty
     return [];
   }
 }

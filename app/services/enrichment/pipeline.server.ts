@@ -71,10 +71,36 @@ export async function runEnrichmentPipeline(
       products = await fetchAllActiveProducts(admin, maxProducts);
     }
 
+    // Step 1b: Filter out already-enriched products (APPLIED or PENDING)
+    const existingLogs = await prisma.enrichmentLog.findMany({
+      where: {
+        shop,
+        shopifyProductId: { in: products.map((p) => p.id) },
+        status: { in: ["APPLIED", "PENDING"] },
+      },
+      select: { shopifyProductId: true },
+    });
+    const alreadyProcessed = new Set(
+      existingLogs.map((l) => l.shopifyProductId),
+    );
+    const newProducts = products.filter(
+      (p) => !alreadyProcessed.has(p.id),
+    );
+
+    console.log(
+      `[pipeline] Fetched ${products.length} active products, ${alreadyProcessed.size} already enriched, ${newProducts.length} new to process`,
+    );
+
+    products = newProducts;
+
     await prisma.enrichmentRun.update({
       where: { id: run.id },
       data: { totalProducts: products.length },
     });
+
+    if (products.length === 0) {
+      console.log("[pipeline] No new products to enrich, run complete");
+    }
 
     // Process each product
     for (const product of products) {

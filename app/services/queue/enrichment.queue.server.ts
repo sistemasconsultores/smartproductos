@@ -15,13 +15,9 @@ export function getEnrichmentQueue(): Queue<EnrichmentJobData> {
     enrichmentQueue = new Queue<EnrichmentJobData>("enrichment", {
       connection: getRedis(),
       defaultJobOptions: {
-        removeOnComplete: { count: 100 },
-        removeOnFail: { count: 50 },
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 5000,
-        },
+        removeOnComplete: { count: 50 },
+        removeOnFail: { count: 20 },
+        attempts: 1, // No retries - avoid reprocessing same products
       },
     });
   }
