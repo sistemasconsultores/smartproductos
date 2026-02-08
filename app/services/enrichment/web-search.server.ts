@@ -17,7 +17,12 @@ type SearchProvider = (query: string) => Promise<SearchResult[]>;
 const providers: SearchProvider[] = [serpApiSearch, serperSearch, googleCustomSearch];
 
 // Circuit breaker: disable Google Search after quota exhaustion (403) to avoid wasting time
-let googleSearchDisabledUntil = 0;
+// Exported so image-search can check the same quota state (shared Google API key)
+export let googleSearchDisabledUntil = 0;
+
+export function setGoogleSearchDisabled(until: number): void {
+  googleSearchDisabledUntil = until;
+}
 
 export async function searchBySkuOrTitle(
   sku: string | null,

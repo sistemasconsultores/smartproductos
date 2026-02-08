@@ -250,7 +250,6 @@ async function processProduct(
   // Step 4: AI Process
   const { response: enrichment, raw: aiRaw } = await callGemini(
     product,
-    null,
     searchResults,
   );
 

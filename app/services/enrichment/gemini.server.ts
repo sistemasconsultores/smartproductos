@@ -1,5 +1,4 @@
 import type { ShopifyProduct } from "../shopify/queries.server";
-import type { BarcodeData } from "./barcode-lookup.server";
 import type { SearchResult } from "./web-search.server";
 
 export interface GeminiEnrichmentResponse {
@@ -37,7 +36,6 @@ Responde UNICAMENTE con un objeto JSON valido, sin markdown, sin comentarios.`;
 
 function buildUserPrompt(
   product: ShopifyProduct,
-  barcodeData: BarcodeData | null,
   searchResults: SearchResult[],
 ): string {
   const firstVariant = product.variants.edges[0]?.node;
@@ -116,7 +114,6 @@ NOTAS:
 
 export async function callGemini(
   product: ShopifyProduct,
-  barcodeData: BarcodeData | null,
   searchResults: SearchResult[],
 ): Promise<{ response: GeminiEnrichmentResponse; raw: string }> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -126,7 +123,7 @@ export async function callGemini(
     throw new Error("GEMINI_API_KEY not configured");
   }
 
-  const userPrompt = buildUserPrompt(product, barcodeData, searchResults);
+  const userPrompt = buildUserPrompt(product, searchResults);
   const fullPrompt = SYSTEM_PROMPT + "\n\n" + userPrompt;
 
   const body = {

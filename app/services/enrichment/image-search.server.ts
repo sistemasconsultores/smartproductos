@@ -5,6 +5,10 @@ import {
   cacheKey,
   SEARCH_CACHE_TTL,
 } from "../redis.server";
+import {
+  googleSearchDisabledUntil,
+  setGoogleSearchDisabled,
+} from "./web-search.server";
 
 export interface ImageResult {
   url: string;
@@ -49,6 +53,11 @@ async function googleImageSearch(query: string): Promise<ImageResult[]> {
   const cx = process.env.GOOGLE_SEARCH_CX;
   if (!apiKey || !cx) return [];
 
+  // Share circuit breaker with web-search (same Google API key and quota)
+  if (Date.now() < googleSearchDisabledUntil) {
+    return [];
+  }
+
   try {
     const params = new URLSearchParams({
       key: apiKey,
@@ -65,9 +74,11 @@ async function googleImageSearch(query: string): Promise<ImageResult[]> {
     );
 
     if (!response.ok) {
-      if (response.status === 429) {
-        console.warn("[images] Google Image Search rate limited");
-        return [];
+      if (response.status === 403 || response.status === 429) {
+        setGoogleSearchDisabled(Date.now() + 3600000);
+        console.warn(
+          `[images] Google Image Search ${response.status} — disabled for 1 hour`,
+        );
       }
       return [];
     }
