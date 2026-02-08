@@ -10,18 +10,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     redis: "error",
   };
 
-  // Check database
+  // Check database (5s timeout)
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("DB timeout")), 5000),
+      ),
+    ]);
     checks.database = "ok";
   } catch {
     checks.database = "error";
   }
 
-  // Check Redis
+  // Check Redis (5s timeout)
   try {
     const redis = getRedis();
-    await redis.ping();
+    await Promise.race([
+      redis.ping(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Redis timeout")), 5000),
+      ),
+    ]);
     checks.redis = "ok";
   } catch {
     checks.redis = "error";

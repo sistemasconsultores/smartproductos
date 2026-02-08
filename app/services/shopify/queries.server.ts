@@ -3,7 +3,7 @@ import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 // CRITICAL: NEVER include price, compareAtPrice, or cost fields
 const PRODUCTS_FOR_ENRICHMENT_QUERY = `#graphql
   query GetProductsForEnrichment($cursor: String, $query: String) {
-    products(first: 50, after: $cursor, query: $query) {
+    products(first: 50, after: $cursor, query: $query, sortKey: CREATED_AT, reverse: true) {
       edges {
         node {
           id

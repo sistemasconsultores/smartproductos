@@ -28,8 +28,7 @@ const WEIGHTS = {
   category: 5,
   vendor: 3,
   tags: 7,
-  sku: 3,
-  barcode: 2,
+  sku: 5, // Increased from 3 (absorbed barcode's 2 points)
   seoTitle: 8,
   seoDescription: 7,
   metafields: 25,
@@ -112,11 +111,8 @@ export function analyzeCompleteness(
     score += WEIGHTS.sku;
   }
 
-  // Barcode (2 pts)
+  // Barcode field not scored (used for provider references, not UPC)
   const hasBarcode = !!firstVariant?.barcode?.trim();
-  if (hasBarcode) {
-    score += WEIGHTS.barcode;
-  }
 
   // SEO Title (8 pts)
   const hasSeoTitle = !!product.seo?.title?.trim();

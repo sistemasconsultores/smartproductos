@@ -7,7 +7,6 @@ import {
 } from "../shopify/queries.server";
 import type { ShopifyProduct } from "../shopify/queries.server";
 import { analyzeCompleteness, shouldEnrich } from "./analyzer.server";
-import { lookupBarcode } from "./barcode-lookup.server";
 import { searchBySkuOrTitle } from "./web-search.server";
 import { searchProductImages } from "./image-search.server";
 import {
@@ -193,6 +192,22 @@ async function processProduct(
     return "skipped";
   }
 
+  // Per-product dedup check: verify this product hasn't been enriched by a concurrent run
+  const existingLog = await prisma.enrichmentLog.findFirst({
+    where: {
+      shop,
+      shopifyProductId: product.id,
+      status: { in: ["APPLIED", "PENDING"] },
+    },
+    select: { id: true },
+  });
+  if (existingLog) {
+    console.log(
+      `[pipeline] Skipping already-enriched product ${product.id} (dedup check)`,
+    );
+    return "skipped";
+  }
+
   // Step 2: Analyze completeness
   const analysis = analyzeCompleteness(product);
 
@@ -211,12 +226,10 @@ async function processProduct(
     return "skipped";
   }
 
-  // Step 3: Search external data
+  // Step 3: Search external data (barcode lookup removed - barcodes are provider references, not UPCs)
   const firstVariant = product.variants.edges[0]?.node;
-  const barcode = firstVariant?.barcode || null;
   const sku = firstVariant?.sku || null;
 
-  const barcodeData = barcode ? await lookupBarcode(barcode) : null;
   const searchResults = await searchBySkuOrTitle(
     sku,
     product.title,
@@ -237,7 +250,6 @@ async function processProduct(
   // Step 4: AI Process
   const { response: enrichment, raw: aiRaw } = await callGemini(
     product,
-    barcodeData,
     searchResults,
   );
 
@@ -263,7 +275,7 @@ async function processProduct(
         aiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
         aiResponseRaw: aiRaw,
         confidenceScore: confidenceNum,
-        barcodeData: barcodeData as unknown as Prisma.InputJsonValue,
+        barcodeData: null,
         searchData: searchResults as unknown as Prisma.InputJsonValue,
         errorMessage: `Validation failed: ${validation.errors.join("; ")}`,
       },
@@ -311,7 +323,7 @@ async function processProduct(
         confidenceScore: confidenceNum,
         aiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
         aiResponseRaw: aiRaw,
-        barcodeData: barcodeData as unknown as Prisma.InputJsonValue,
+        barcodeData: null,
         searchData: searchResults as unknown as Prisma.InputJsonValue,
         appliedAt: result.errors.length === 0 ? new Date() : undefined,
         errorMessage:
@@ -338,7 +350,7 @@ async function processProduct(
       confidenceScore: confidenceNum,
       aiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
       aiResponseRaw: aiRaw,
-      barcodeData: barcodeData as unknown as Prisma.InputJsonValue,
+      barcodeData: null,
       searchData: searchResults as unknown as Prisma.InputJsonValue,
     },
   });

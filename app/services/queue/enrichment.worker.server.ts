@@ -79,6 +79,8 @@ export function createEnrichmentWorker(
     {
       connection: getRedis(),
       concurrency,
+      lockDuration: 600000, // 10 minutes - processing 50 products takes several minutes
+      stalledInterval: 300000, // Check stalled every 5 minutes (must be < lockDuration)
       limiter: {
         max: 10,
         duration: 60000, // Max 10 jobs per minute (Gemini rate limiting)

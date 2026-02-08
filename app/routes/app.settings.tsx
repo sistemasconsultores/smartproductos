@@ -44,13 +44,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
 
-  const cronSchedule = formData.get("cronSchedule") as string;
+  const cronSchedule = String(formData.get("cronSchedule") || "0 2 * * *");
   const cronEnabled = formData.get("cronEnabled") === "true";
   const autoApply = formData.get("autoApply") === "true";
-  const maxProductsPerRun = Number(formData.get("maxProductsPerRun") || 50);
-  const minConfidenceScore = parseFloat(
-    (formData.get("minConfidenceScore") as string) || "0.7",
-  );
+
+  const rawMax = Number(formData.get("maxProductsPerRun"));
+  const maxProductsPerRun =
+    Number.isFinite(rawMax) && rawMax >= 1 && rawMax <= 200
+      ? Math.round(rawMax)
+      : 50;
+
+  const rawConf = parseFloat(String(formData.get("minConfidenceScore")));
+  const minConfidenceScore =
+    Number.isFinite(rawConf) && rawConf >= 0 && rawConf <= 1
+      ? rawConf
+      : 0.7;
 
   const config = await prisma.appConfig.upsert({
     where: { shop: session.shop },

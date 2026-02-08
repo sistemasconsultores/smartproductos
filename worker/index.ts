@@ -62,9 +62,9 @@ async function setupCronJobs() {
       );
       await setupCronJob(defaultShop, defaultCronSchedule);
     } else {
-      for (const config of configs) {
-        await setupCronJob(config.shop, config.cronSchedule);
-      }
+      await Promise.all(
+        configs.map((config) => setupCronJob(config.shop, config.cronSchedule)),
+      );
     }
 
     console.log(`[cron] ${Math.max(configs.length, 1)} cron job(s) registered`);
