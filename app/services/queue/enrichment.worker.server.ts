@@ -1,10 +1,8 @@
 import { Worker, Job } from "bullmq";
-import { PrismaClient } from "@prisma/client";
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import { getRedis } from "../redis.server";
+import prisma from "../../db.server";
 import type { EnrichmentJobData } from "./enrichment.queue.server";
-
-const prisma = new PrismaClient();
 
 export function createEnrichmentWorker(
   concurrency: number = 3,
@@ -95,7 +93,7 @@ export function createEnrichmentWorker(
   worker.on("failed", (job, error) => {
     console.error(
       `[worker] Job ${job?.id} failed:`,
-      error.message,
+      error?.message ?? String(error),
     );
   });
 

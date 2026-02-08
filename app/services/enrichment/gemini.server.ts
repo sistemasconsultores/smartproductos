@@ -222,20 +222,16 @@ export async function callGemini(
       }
       return { response: parsed, raw: rawText };
     } catch (error) {
-      lastError = error as Error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      lastError = error instanceof Error ? error : new Error(errorMessage);
 
-      if (
-        (error as Error).message?.includes("invalid JSON")
-      ) {
-        throw error;
+      if (errorMessage.includes("invalid JSON")) {
+        throw lastError;
       }
 
       const delay = retryDelays[attempt];
       if (delay && attempt < retryDelays.length) {
-        console.warn(
-          `[gemini] Error, retrying in ${delay}ms:`,
-          (error as Error).message,
-        );
+        console.warn(`[gemini] Error, retrying in ${delay}ms:`, errorMessage);
         await sleep(delay);
         continue;
       }
