@@ -5,38 +5,39 @@ import {
   Page,
   Layout,
   Card,
-  IndexTable,
   Badge,
   Text,
-  useIndexResourceState,
   Pagination,
   BlockStack,
   InlineStack,
   Button,
-  Filters,
+  Box,
+  Divider,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useCallback } from "react";
+
+const ITEMS_PER_PAGE = 50;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
   const statusFilter = url.searchParams.get("status") || undefined;
   const page = Number(url.searchParams.get("page") || 1);
-  const limit = 25;
 
+  const baseWhere = { shop: session.shop };
   const where = {
-    shop: session.shop,
+    ...baseWhere,
     ...(statusFilter ? { status: statusFilter as never } : {}),
   };
 
-  const [logs, total] = await Promise.all([
+  const [logs, total, statusCounts] = await Promise.all([
     prisma.enrichmentLog.findMany({
       where,
       orderBy: { processedAt: "desc" },
-      take: limit,
-      skip: (page - 1) * limit,
+      take: ITEMS_PER_PAGE,
+      skip: (page - 1) * ITEMS_PER_PAGE,
       select: {
         id: true,
         shopifyProductId: true,
@@ -49,29 +50,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       },
     }),
     prisma.enrichmentLog.count({ where }),
+    prisma.enrichmentLog.groupBy({
+      by: ["status"],
+      where: baseWhere,
+      _count: { status: true },
+    }),
   ]);
 
-  return json({ logs, total, page, limit });
+  const counts: Record<string, number> = {};
+  let totalAll = 0;
+  for (const group of statusCounts) {
+    counts[group.status] = group._count.status;
+    totalAll += group._count.status;
+  }
+  counts["ALL"] = totalAll;
+
+  return json({ logs, total, page, counts });
 };
 
 export default function Products() {
-  const { logs, total, page, limit } = useLoaderData<typeof loader>();
+  const { logs, total, page, counts } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
   const hasNext = page < totalPages;
   const hasPrevious = page > 1;
 
   const currentStatus = searchParams.get("status") || "";
-
-  const resourceName = {
-    singular: "producto",
-    plural: "productos",
-  };
-
-  const { selectedResources, allResourcesSelected, handleSelectionChange } =
-    useIndexResourceState(logs);
 
   const statusBadge = (status: string) => {
     const map: Record<string, { tone: "success" | "info" | "warning" | "critical"; label: string }> = {
@@ -105,112 +111,142 @@ export default function Products() {
     [navigate],
   );
 
-  const rowMarkup = logs.map((log, index) => (
-    <IndexTable.Row
-      id={log.id}
-      key={log.id}
-      selected={selectedResources.includes(log.id)}
-      position={index}
-    >
-      <IndexTable.Cell>
-        <Link to={`/app/products/${log.id}`}>
-          <Text variant="bodyMd" fontWeight="bold" as="span">
-            {log.shopifyProductTitle}
-          </Text>
-        </Link>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodySm">
-          {log.scoreBefore}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodySm">
-          {log.scoreAfter ?? "—"}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodySm">
-          {log.confidenceScore
-            ? `${Math.round(log.confidenceScore * 100)}%`
-            : "—"}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>{statusBadge(log.status)}</IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodySm" tone="subdued">
-          {new Date(log.processedAt).toLocaleDateString("es-CR")}
-        </Text>
-      </IndexTable.Cell>
-    </IndexTable.Row>
-  ));
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("es-CR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const truncate = (text: string, maxLen: number) =>
+    text.length > maxLen ? text.substring(0, maxLen) + "..." : text;
+
+  const filterButtons: { label: string; value: string }[] = [
+    { label: `Todos (${counts["ALL"] ?? 0})`, value: "" },
+    { label: `Aplicados (${counts["APPLIED"] ?? 0})`, value: "APPLIED" },
+    { label: `Pendientes (${counts["PENDING"] ?? 0})`, value: "PENDING" },
+    { label: `Fallidos (${counts["FAILED"] ?? 0})`, value: "FAILED" },
+    { label: `Omitidos (${counts["SKIPPED"] ?? 0})`, value: "SKIPPED" },
+  ];
 
   return (
     <Page title="Productos" subtitle={`${total} productos procesados`}>
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            <InlineStack gap="200">
-              <Button
-                variant={currentStatus === "" ? "primary" : "tertiary"}
-                onClick={() => filterByStatus("")}
-                size="slim"
-              >
-                Todos
-              </Button>
-              <Button
-                variant={currentStatus === "APPLIED" ? "primary" : "tertiary"}
-                onClick={() => filterByStatus("APPLIED")}
-                size="slim"
-              >
-                Aplicados
-              </Button>
-              <Button
-                variant={currentStatus === "PENDING" ? "primary" : "tertiary"}
-                onClick={() => filterByStatus("PENDING")}
-                size="slim"
-              >
-                Pendientes
-              </Button>
-              <Button
-                variant={currentStatus === "FAILED" ? "primary" : "tertiary"}
-                onClick={() => filterByStatus("FAILED")}
-                size="slim"
-              >
-                Fallidos
-              </Button>
+            {/* Status filter buttons with counts */}
+            <InlineStack gap="200" wrap>
+              {filterButtons.map((btn) => (
+                <Button
+                  key={btn.value}
+                  variant={currentStatus === btn.value ? "primary" : "tertiary"}
+                  onClick={() => filterByStatus(btn.value)}
+                  size="slim"
+                >
+                  {btn.label}
+                </Button>
+              ))}
             </InlineStack>
 
+            {/* Product list */}
             <Card padding="0">
-              <IndexTable
-                resourceName={resourceName}
-                itemCount={logs.length}
-                selectedItemsCount={
-                  allResourcesSelected ? "All" : selectedResources.length
-                }
-                onSelectionChange={handleSelectionChange}
-                headings={[
-                  { title: "Producto" },
-                  { title: "Score antes" },
-                  { title: "Score después" },
-                  { title: "Confianza" },
-                  { title: "Estado" },
-                  { title: "Fecha" },
-                ]}
-              >
-                {rowMarkup}
-              </IndexTable>
+              {/* Table header */}
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--p-color-border-subdued)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 100px 140px", gap: "8px", alignItems: "center" }}>
+                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
+                    Producto
+                  </Text>
+                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
+                    Score
+                  </Text>
+                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
+                    Confianza
+                  </Text>
+                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
+                    Estado
+                  </Text>
+                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
+                    Fecha
+                  </Text>
+                </div>
+              </div>
+
+              {/* Scrollable rows */}
+              <div style={{ maxHeight: "calc(100vh - 280px)", overflowY: "auto" }}>
+                {logs.length === 0 ? (
+                  <Box padding="800">
+                    <BlockStack align="center" inlineAlign="center">
+                      <Text as="p" variant="bodyMd" tone="subdued">
+                        No se encontraron productos con este filtro.
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                ) : (
+                  logs.map((log, index) => (
+                    <div key={log.id}>
+                      <Link
+                        to={`/app/products/${log.id}`}
+                        style={{ textDecoration: "none", color: "inherit" }}
+                      >
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 80px 80px 100px 140px",
+                            gap: "8px",
+                            alignItems: "center",
+                            padding: "10px 16px",
+                            cursor: "pointer",
+                            transition: "background 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "var(--p-color-bg-surface-hover)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <Text as="span" variant="bodyMd" fontWeight="semibold">
+                              {truncate(log.shopifyProductTitle, 60)}
+                            </Text>
+                          </div>
+                          <Text as="span" variant="bodySm">
+                            {log.scoreBefore}
+                          </Text>
+                          <Text as="span" variant="bodySm">
+                            {log.confidenceScore
+                              ? `${Math.round(log.confidenceScore * 100)}%`
+                              : "—"}
+                          </Text>
+                          <div>{statusBadge(log.status)}</div>
+                          <Text as="span" variant="bodySm" tone="subdued">
+                            {formatDate(log.processedAt)}
+                          </Text>
+                        </div>
+                      </Link>
+                      {index < logs.length - 1 && <Divider />}
+                    </div>
+                  ))
+                )}
+              </div>
             </Card>
 
-            <InlineStack align="center">
-              <Pagination
-                hasPrevious={hasPrevious}
-                hasNext={hasNext}
-                onPrevious={() => goToPage(page - 1)}
-                onNext={() => goToPage(page + 1)}
-                label={`Página ${page} de ${totalPages}`}
-              />
-            </InlineStack>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <InlineStack align="center">
+                <Pagination
+                  hasPrevious={hasPrevious}
+                  hasNext={hasNext}
+                  onPrevious={() => goToPage(page - 1)}
+                  onNext={() => goToPage(page + 1)}
+                  label={`Pagina ${page} de ${totalPages} (${total} productos)`}
+                />
+              </InlineStack>
+            )}
           </BlockStack>
         </Layout.Section>
       </Layout>
