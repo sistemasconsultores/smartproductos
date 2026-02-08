@@ -2,7 +2,7 @@ import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import type { Prisma } from "@prisma/client";
 import prisma from "../../db.server";
 import {
-  fetchAllActiveProducts,
+  fetchProductsForEnrichment,
   fetchSingleProduct,
 } from "../shopify/queries.server";
 import type { ShopifyProduct } from "../shopify/queries.server";
@@ -62,35 +62,13 @@ export async function runEnrichmentPipeline(
   let products: ShopifyProduct[] = [];
 
   try {
-    // Step 1: Fetch products
+    // Step 1: Fetch un-enriched products (paginating past already-enriched ones)
     if (productId) {
       const product = await fetchSingleProduct(admin, productId);
       if (product) products = [product];
     } else {
-      products = await fetchAllActiveProducts(admin, maxProducts);
+      products = await fetchUnenrichedProducts(admin, shop, maxProducts);
     }
-
-    // Step 1b: Filter out already-enriched products (APPLIED or PENDING)
-    const existingLogs = await prisma.enrichmentLog.findMany({
-      where: {
-        shop,
-        shopifyProductId: { in: products.map((p) => p.id) },
-        status: { in: ["APPLIED", "PENDING"] },
-      },
-      select: { shopifyProductId: true },
-    });
-    const alreadyProcessed = new Set(
-      existingLogs.map((l) => l.shopifyProductId),
-    );
-    const newProducts = products.filter(
-      (p) => !alreadyProcessed.has(p.id),
-    );
-
-    console.log(
-      `[pipeline] Fetched ${products.length} active products, ${alreadyProcessed.size} already enriched, ${newProducts.length} new to process`,
-    );
-
-    products = newProducts;
 
     await prisma.enrichmentRun.update({
       where: { id: run.id },
@@ -99,6 +77,10 @@ export async function runEnrichmentPipeline(
 
     if (products.length === 0) {
       console.log("[pipeline] No new products to enrich, run complete");
+    } else {
+      console.log(
+        `[pipeline] First product to enrich: "${products[0].title}" (${products[0].id})`,
+      );
     }
 
     // Process each product
@@ -174,6 +156,73 @@ export async function runEnrichmentPipeline(
     failedCount,
     skippedCount,
   };
+}
+
+/**
+ * Paginates through Shopify products (newest first) and skips already-enriched ones.
+ * Continues paginating until we find `maxProducts` un-enriched products or run out of pages.
+ * This prevents the pipeline from re-processing products and wasting API tokens.
+ */
+async function fetchUnenrichedProducts(
+  admin: AdminApiContext,
+  shop: string,
+  maxProducts: number,
+): Promise<ShopifyProduct[]> {
+  const unenriched: ShopifyProduct[] = [];
+  let cursor: string | undefined;
+  let hasNextPage = true;
+  let pagesScanned = 0;
+  let totalFetched = 0;
+  let totalSkippedEnriched = 0;
+
+  while (hasNextPage && unenriched.length < maxProducts) {
+    const { products, pageInfo } = await fetchProductsForEnrichment(
+      admin,
+      cursor,
+      "status:active",
+    );
+    pagesScanned++;
+
+    if (products.length === 0) break;
+
+    const active = products.filter((p) => p.status === "ACTIVE");
+    totalFetched += active.length;
+
+    // Batch dedup: check which products in this page are already enriched
+    const ids = active.map((p) => p.id);
+    const existingLogs = await prisma.enrichmentLog.findMany({
+      where: {
+        shop,
+        shopifyProductId: { in: ids },
+        status: { in: ["APPLIED", "PENDING"] },
+      },
+      select: { shopifyProductId: true },
+    });
+    const alreadyDone = new Set(
+      existingLogs.map((l) => l.shopifyProductId),
+    );
+
+    const newInPage = active.filter((p) => !alreadyDone.has(p.id));
+    totalSkippedEnriched += alreadyDone.size;
+
+    console.log(
+      `[pipeline] Page ${pagesScanned}: ${active.length} active, ${alreadyDone.size} already enriched, ${newInPage.length} new`,
+    );
+
+    for (const product of newInPage) {
+      unenriched.push(product);
+      if (unenriched.length >= maxProducts) break;
+    }
+
+    hasNextPage = pageInfo.hasNextPage;
+    cursor = pageInfo.endCursor ?? undefined;
+  }
+
+  console.log(
+    `[pipeline] Scan complete: ${pagesScanned} page(s), ${totalFetched} products scanned, ${totalSkippedEnriched} already enriched, ${unenriched.length} to process`,
+  );
+
+  return unenriched;
 }
 
 async function processProduct(
