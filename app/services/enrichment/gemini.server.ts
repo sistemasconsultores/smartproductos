@@ -264,15 +264,15 @@ const VALID_METAFIELD_KEYS = new Set([
 ]);
 
 const FORBIDDEN_TERMS = [
-  "precio",
-  "costo",
-  "\\$",
-  "colones",
-  "dolares",
+  "\\bprecio(s)?\\b",
+  "\\bcosto(s)?\\b",
+  "\\$\\s*\\d",       // Dollar sign followed by digit (monetary values)
+  "\\bcolones\\b",
+  "\\bdolares\\b",
   "₡",
-  "usd",
-  "cost",
-  "price",
+  "\\busd\\b",
+  "\\bcost\\b",       // Word boundary prevents matching "Costa Rica"
+  "\\bprice(s)?\\b",
 ];
 
 const FORBIDDEN_REGEX = new RegExp(FORBIDDEN_TERMS.join("|"), "i");
@@ -318,12 +318,12 @@ export function validateGeminiResponse(
     }
   }
 
-  // 6. SEO limits
+  // 6. SEO limits - truncate instead of rejecting
   if (response.seo_title && response.seo_title.length > 70) {
-    errors.push("seo_title exceeds 70 characters");
+    response.seo_title = response.seo_title.slice(0, 70);
   }
   if (response.seo_description && response.seo_description.length > 160) {
-    errors.push("seo_description exceeds 160 characters");
+    response.seo_description = response.seo_description.slice(0, 160);
   }
 
   // 7. HTML sanitization check
