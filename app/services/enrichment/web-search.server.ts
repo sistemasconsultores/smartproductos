@@ -16,6 +16,9 @@ type SearchProvider = (query: string) => Promise<SearchResult[]>;
 
 const providers: SearchProvider[] = [serpApiSearch, serperSearch, googleCustomSearch];
 
+// Circuit breaker: disable Google Search after quota exhaustion (403) to avoid wasting time
+let googleSearchDisabledUntil = 0;
+
 export async function searchBySkuOrTitle(
   sku: string | null,
   title: string,
@@ -124,6 +127,11 @@ async function googleCustomSearch(query: string): Promise<SearchResult[]> {
   const cx = process.env.GOOGLE_SEARCH_CX;
   if (!apiKey || !cx) return [];
 
+  // Circuit breaker: skip if quota was recently exhausted (403)
+  if (Date.now() < googleSearchDisabledUntil) {
+    return [];
+  }
+
   try {
     const params = new URLSearchParams({
       key: apiKey,
@@ -140,6 +148,11 @@ async function googleCustomSearch(query: string): Promise<SearchResult[]> {
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "unable to read body");
       console.error(`[search] Google Custom Search ${response.status}: ${errorBody}`);
+      if (response.status === 403 || response.status === 429) {
+        // Disable for 1 hour on quota exhaustion
+        googleSearchDisabledUntil = Date.now() + 3600000;
+        console.warn(`[search] Google Custom Search disabled for 1 hour (quota exhausted)`);
+      }
       return [];
     }
 

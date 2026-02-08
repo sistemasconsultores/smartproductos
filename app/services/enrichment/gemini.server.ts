@@ -28,7 +28,7 @@ REGLAS ESTRICTAS:
 5. Si no tenes certeza sobre un dato especifico, dejalo como null
 6. IMPORTANTE sobre confidence_score:
    - Si el titulo del producto identifica claramente la marca y modelo (ej: "Nexxt Patch Cord Cat6"), asigna >= 0.7
-   - Si ademas tenes datos de barcode o busqueda web, asigna >= 0.8
+   - Si ademas tenes datos de busqueda web, asigna >= 0.8
    - Solo asigna < 0.5 si el producto es completamente generico sin marca ni modelo identificable
    - Para productos de tecnologia con marca conocida, la confianza minima debe ser 0.6
 
@@ -46,14 +46,6 @@ function buildUserPrompt(
     .map((e) => `  ${e.node.key}: ${e.node.value}`)
     .join("\n");
 
-  const barcodeSection = barcodeData
-    ? `Nombre: ${barcodeData.name}
-Marca: ${barcodeData.brand}
-Descripcion: ${barcodeData.description}
-Categoria: ${barcodeData.category}
-Especificaciones: ${JSON.stringify(barcodeData.specs)}`
-    : "No se encontro informacion por barcode";
-
   const searchSection =
     searchResults.length > 0
       ? searchResults
@@ -70,12 +62,8 @@ Especificaciones: ${JSON.stringify(barcodeData.specs)}`
 - Vendor/Marca: ${product.vendor}
 - Tags actuales: ${product.tags.length > 0 ? product.tags.join(", ") : "NINGUNO"}
 - SKU: ${firstVariant?.sku || "SIN SKU"}
-- Barcode: ${firstVariant?.barcode || "SIN BARCODE"}
 - Imagenes actuales: ${product.images.edges.length} imagenes
 - Categoria Shopify: ${product.category?.fullName || "SIN CATEGORIA"}
-
-## DATOS ENCONTRADOS POR BARCODE:
-${barcodeSection}
 
 ## DATOS ENCONTRADOS POR BUSQUEDA WEB:
 ${searchSection}
