@@ -12,7 +12,6 @@ export function getRedis(): Redis {
   return redis;
 }
 
-const BARCODE_CACHE_TTL = 2592000; // 30 days
 const SEARCH_CACHE_TTL = 604800; // 7 days
 
 export async function getCachedData(key: string): Promise<string | null> {
@@ -27,8 +26,8 @@ export async function setCachedData(
   await getRedis().set(key, data, "EX", ttlSeconds);
 }
 
-export function cacheKey(type: "barcode" | "search" | "images", id: string) {
+export function cacheKey(type: "search" | "images", id: string) {
   return `cache:${type}:${id}`;
 }
 
-export { BARCODE_CACHE_TTL, SEARCH_CACHE_TTL };
+export { SEARCH_CACHE_TTL };

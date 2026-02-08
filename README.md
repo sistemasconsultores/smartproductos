@@ -130,7 +130,6 @@ smartproductos/
     |   |-- enrichment/
     |   |   |-- pipeline.server.ts    # Orquestador principal (6 pasos)
     |   |   |-- analyzer.server.ts    # Score completitud 0-100
-    |   |   |-- barcode-lookup.server.ts  # Go-UPC + UPCitemdb
     |   |   |-- web-search.server.ts  # Serper.dev + SerpAPI
     |   |   |-- image-search.server.ts    # Serper Images
     |   |   |-- gemini.server.ts      # Google Gemini API + validacion

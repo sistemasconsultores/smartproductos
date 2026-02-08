@@ -34,10 +34,10 @@ model AppConfig {
   
   // API Keys (encriptadas)
   geminiApiKey        String?
-  goUpcApiKey          String?
-  barcodeLookupApiKey  String?
-  googleSearchApiKey   String?
-  googleSearchCx       String?
+  goUpcApiKey          String?  // @deprecated - barcode lookup removed
+  barcodeLookupApiKey  String?  // @deprecated - barcode lookup removed
+  googleSearchApiKey   String?  // @deprecated - replaced by Serper.dev
+  googleSearchCx       String?  // @deprecated - replaced by Serper.dev
   internalApiKey       String?  // Para autenticar llamadas de n8n
   
   // MinIO
@@ -124,8 +124,8 @@ model EnrichmentLog {
   aiResponseRaw         String?       // Respuesta cruda de Gemini
   
   // Datos de busqueda
-  barcodeData           Json?         // Datos del barcode API
-  searchData            Json?         // Datos de Google Search
+  barcodeData           Json?         // Legacy: siempre null (barcodes son codigos de proveedor)
+  searchData            Json?         // Datos de Serper/SerpAPI
   
   // Error info
   errorMessage          String?
