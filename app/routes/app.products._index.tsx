@@ -1,10 +1,11 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, Link, useNavigate, useSearchParams } from "@remix-run/react";
+import { useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
 import {
   Page,
   Layout,
   Card,
+  IndexTable,
   Badge,
   Text,
   Pagination,
@@ -12,13 +13,12 @@ import {
   InlineStack,
   Button,
   Box,
-  Divider,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useCallback } from "react";
 
-const ITEMS_PER_PAGE = 50;
+const ITEMS_PER_PAGE = 25;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -43,7 +43,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         shopifyProductId: true,
         shopifyProductTitle: true,
         scoreBefore: true,
-        scoreAfter: true,
         status: true,
         confidenceScore: true,
         processedAt: true,
@@ -78,6 +77,11 @@ export default function Products() {
   const hasPrevious = page > 1;
 
   const currentStatus = searchParams.get("status") || "";
+
+  const resourceName = {
+    singular: "producto",
+    plural: "productos",
+  };
 
   const statusBadge = (status: string) => {
     const map: Record<string, { tone: "success" | "info" | "warning" | "critical"; label: string }> = {
@@ -117,13 +121,8 @@ export default function Products() {
       day: "2-digit",
       month: "short",
       year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     });
   };
-
-  const truncate = (text: string, maxLen: number) =>
-    text.length > maxLen ? text.substring(0, maxLen) + "..." : text;
 
   const filterButtons: { label: string; value: string }[] = [
     { label: `Todos (${counts["ALL"] ?? 0})`, value: "" },
@@ -133,12 +132,46 @@ export default function Products() {
     { label: `Omitidos (${counts["SKIPPED"] ?? 0})`, value: "SKIPPED" },
   ];
 
+  const rowMarkup = logs.map((log, index) => (
+    <IndexTable.Row
+      id={log.id}
+      key={log.id}
+      position={index}
+      onClick={() => navigate(`/app/products/${log.id}`)}
+    >
+      <IndexTable.Cell>
+        <Text variant="bodyMd" fontWeight="bold" as="span">
+          {log.shopifyProductTitle.length > 65
+            ? log.shopifyProductTitle.substring(0, 65) + "..."
+            : log.shopifyProductTitle}
+        </Text>
+      </IndexTable.Cell>
+      <IndexTable.Cell>
+        <Text as="span" variant="bodySm">
+          {log.scoreBefore}
+        </Text>
+      </IndexTable.Cell>
+      <IndexTable.Cell>
+        <Text as="span" variant="bodySm">
+          {log.confidenceScore
+            ? `${Math.round(log.confidenceScore * 100)}%`
+            : "—"}
+        </Text>
+      </IndexTable.Cell>
+      <IndexTable.Cell>{statusBadge(log.status)}</IndexTable.Cell>
+      <IndexTable.Cell>
+        <Text as="span" variant="bodySm" tone="subdued">
+          {formatDate(log.processedAt)}
+        </Text>
+      </IndexTable.Cell>
+    </IndexTable.Row>
+  ));
+
   return (
     <Page title="Productos" subtitle={`${total} productos procesados`}>
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            {/* Status filter buttons with counts */}
             <InlineStack gap="200" wrap>
               {filterButtons.map((btn) => (
                 <Button
@@ -152,90 +185,33 @@ export default function Products() {
               ))}
             </InlineStack>
 
-            {/* Product list */}
             <Card padding="0">
-              {/* Table header */}
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--p-color-border-subdued)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 100px 140px", gap: "8px", alignItems: "center" }}>
-                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
-                    Producto
-                  </Text>
-                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
-                    Score
-                  </Text>
-                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
-                    Confianza
-                  </Text>
-                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
-                    Estado
-                  </Text>
-                  <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
-                    Fecha
-                  </Text>
-                </div>
-              </div>
-
-              {/* Scrollable rows */}
-              <div style={{ maxHeight: "calc(100vh - 280px)", overflowY: "auto" }}>
-                {logs.length === 0 ? (
-                  <Box padding="800">
-                    <BlockStack align="center" inlineAlign="center">
-                      <Text as="p" variant="bodyMd" tone="subdued">
-                        No se encontraron productos con este filtro.
-                      </Text>
-                    </BlockStack>
-                  </Box>
-                ) : (
-                  logs.map((log, index) => (
-                    <div key={log.id}>
-                      <Link
-                        to={`/app/products/${log.id}`}
-                        style={{ textDecoration: "none", color: "inherit" }}
-                      >
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 80px 80px 100px 140px",
-                            gap: "8px",
-                            alignItems: "center",
-                            padding: "10px 16px",
-                            cursor: "pointer",
-                            transition: "background 0.15s",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "var(--p-color-bg-surface-hover)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "transparent";
-                          }}
-                        >
-                          <div style={{ minWidth: 0 }}>
-                            <Text as="span" variant="bodyMd" fontWeight="semibold">
-                              {truncate(log.shopifyProductTitle, 60)}
-                            </Text>
-                          </div>
-                          <Text as="span" variant="bodySm">
-                            {log.scoreBefore}
-                          </Text>
-                          <Text as="span" variant="bodySm">
-                            {log.confidenceScore
-                              ? `${Math.round(log.confidenceScore * 100)}%`
-                              : "—"}
-                          </Text>
-                          <div>{statusBadge(log.status)}</div>
-                          <Text as="span" variant="bodySm" tone="subdued">
-                            {formatDate(log.processedAt)}
-                          </Text>
-                        </div>
-                      </Link>
-                      {index < logs.length - 1 && <Divider />}
-                    </div>
-                  ))
-                )}
-              </div>
+              {logs.length === 0 ? (
+                <Box padding="800">
+                  <BlockStack align="center" inlineAlign="center">
+                    <Text as="p" variant="bodyMd" tone="subdued">
+                      No se encontraron productos con este filtro.
+                    </Text>
+                  </BlockStack>
+                </Box>
+              ) : (
+                <IndexTable
+                  resourceName={resourceName}
+                  itemCount={logs.length}
+                  selectable={false}
+                  headings={[
+                    { title: "Producto" },
+                    { title: "Score" },
+                    { title: "Confianza" },
+                    { title: "Estado" },
+                    { title: "Fecha" },
+                  ]}
+                >
+                  {rowMarkup}
+                </IndexTable>
+              )}
             </Card>
 
-            {/* Pagination */}
             {totalPages > 1 && (
               <InlineStack align="center">
                 <Pagination
