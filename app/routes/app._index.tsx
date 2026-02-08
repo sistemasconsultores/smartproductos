@@ -9,6 +9,7 @@ import { StatsCards } from "../components/StatsCards";
 import { EnrichmentProgress } from "../components/EnrichmentProgress";
 import { enqueueBatchEnrichment } from "../services/queue/enrichment.queue.server";
 import { applyEnrichment } from "../services/enrichment/shopify-updater.server";
+import { fetchSingleProduct } from "../services/shopify/queries.server";
 import type { GeminiEnrichmentResponse } from "../services/enrichment/gemini.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -70,7 +71,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         continue;
       }
 
-      const result = await applyEnrichment(admin, log.shopifyProductId, enrichment);
+      // Fetch current product tags from Shopify to merge (not replace)
+      const product = await fetchSingleProduct(admin, log.shopifyProductId);
+      const existingTags = product?.tags ?? [];
+
+      const result = await applyEnrichment(admin, log.shopifyProductId, enrichment, existingTags);
 
       if (result.errors.length === 0) {
         await prisma.enrichmentLog.update({
