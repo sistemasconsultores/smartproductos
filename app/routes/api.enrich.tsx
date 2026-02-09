@@ -33,8 +33,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (apiKey && internalKey && apiKey === internalKey) {
     // External trigger (e.g., from webhook or external system)
-    const body = await request.json();
-    shop = body.shop || "smartcostarica.myshopify.com";
+    let body: Record<string, unknown> = {};
+    try {
+      body = await request.json();
+    } catch {
+      // Empty or invalid body is OK for API key auth
+    }
+    shop = (body.shop as string) || "smartcostarica.myshopify.com";
   } else {
     // Shopify embedded app auth
     const { session } = await authenticate.admin(request);
