@@ -1,8 +1,8 @@
-# Estrategia de Prompts - Google Gemini 2.5 Flash
+# Estrategia de Prompts - Google Gemini 2.5 Flash-Lite
 
 ## Modelo
-- Nombre: gemini-2.5-flash
-- Endpoint: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+- Nombre: gemini-2.5-flash-lite
+- Endpoint: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent
 - Auth: Query param key={API_KEY}
 - Free tier: 15 RPM, 1500 RPD
 

@@ -120,7 +120,7 @@ model EnrichmentLog {
   
   // AI info
   confidenceScore       Float?        // 0.0 - 1.0
-  aiModel               String?       // "gemini-2.5-flash"
+  aiModel               String?       // "gemini-2.5-flash-lite"
   aiResponseRaw         String?       // Respuesta cruda de Gemini
   
   // Datos de busqueda

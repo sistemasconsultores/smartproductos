@@ -18,7 +18,7 @@ SmartEnrich es una Shopify Custom App embebida que enriquece automaticamente los
 - Framework: Shopify App Template Remix (React Router v7 + TypeScript)
 - Base de datos: PostgreSQL (existente en Docker) + Prisma ORM
 - Cola de tareas: BullMQ + Redis (existente en Docker)
-- IA: Google Gemini 2.5 Flash API
+- IA: Google Gemini 2.5 Flash-Lite API
 - APIs externas: Serper.dev (busqueda web + imagenes), SerpAPI (fallback)
 - UI: Shopify Polaris React + App Bridge
 - Deployment: Docker Swarm via Portainer en VPS Hostinger (Ubuntu 22.04, 4 CPU, 16GB RAM)
@@ -102,7 +102,7 @@ SmartEnrich JAMAS debe:
 1. Fetch: Productos activos via GraphQL (paginacion cursor-based)
 2. Analyze: Score completitud 0-100
 3. Search: SKU/titulo (Serper.dev / SerpAPI) + imagenes (Serper Images)
-4. AI Process: Gemini 2.5 Flash genera descripcion SEO, metafields, tags, categoria
+4. AI Process: Gemini 2.5 Flash-Lite genera descripcion SEO, metafields, tags, categoria
 5. Validate: JSON (confidence > 0.7, sin precios, HTML limpio)
 6. Apply: Actualizar Shopify o guardar para aprobacion
 

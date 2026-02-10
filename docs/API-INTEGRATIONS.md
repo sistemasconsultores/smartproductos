@@ -79,7 +79,7 @@ Response:
 
 ---
 
-## 3. Google Gemini 2.5 Flash
+## 3. Google Gemini 2.5 Flash-Lite
 
 Ver docs/GEMINI-PROMPTS.md
 
