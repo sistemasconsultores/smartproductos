@@ -188,7 +188,7 @@ REDIS_URL=redis://redis_redis:6379/3
 
 # --- Google Gemini AI ---
 GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-2.5-flash-lite
 
 # --- Busqueda Web (Serper.dev primario, SerpAPI fallback) ---
 SERPER_API_KEY=                # Primario: https://serper.dev (2500 gratis, luego $50/50000)
