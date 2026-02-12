@@ -163,3 +163,72 @@ enum LogStatus {
   FAILED      // Error al procesar o aplicar
   SKIPPED     // Score >= 80, no necesita enriquecimiento
 }
+
+// Proveedor de productos (fuente de scraping)
+model Supplier {
+  id                  String        @id @default(cuid())
+  shop                String
+  name                String        // "Tinkel", "KTL", "PlanetCellCR", "PoderosaCR"
+  slug                String        // "tinkel", "ktl", "planetcellcr", "poderosacr"
+  isActive            Boolean       @default(true)
+
+  // Ultimas estadisticas
+  lastProductCount    Int?
+  lastMargin          Float?        // Margen promedio porcentual
+  lastScrapeDuration  Int?          // Duracion en segundos
+  lastScrapeAt        DateTime?
+  lastScrapeStatus    ScraperStatus @default(IDLE)
+  lastErrorMessage    String?
+
+  // Ejecuciones historicas
+  scraperRuns         ScraperRun[]
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@unique([shop, slug])
+  @@index([shop])
+}
+
+// Cada ejecucion del scraper por proveedor
+model ScraperRun {
+  id                String        @id @default(cuid())
+
+  supplierId        String
+  supplier          Supplier      @relation(fields: [supplierId], references: [id])
+
+  shop              String
+  status            ScraperStatus @default(RUNNING)
+
+  // Estadisticas
+  productsScraped   Int           @default(0)
+  productsCreated   Int           @default(0)
+  productsUpdated   Int           @default(0)
+  productsFailed    Int           @default(0)
+  durationSeconds   Int?
+  averageMargin     Float?
+
+  // Sincronizacion con Shopify
+  syncStatus        String?       // "pending", "syncing", "completed", "failed"
+  syncProductsTotal Int           @default(0)
+  syncProductsDone  Int           @default(0)
+
+  // Errores
+  errorMessage      String?
+  errorDetails      Json?
+
+  startedAt         DateTime      @default(now())
+  completedAt       DateTime?
+
+  @@index([supplierId])
+  @@index([shop])
+  @@index([startedAt])
+  @@index([status])
+}
+
+enum ScraperStatus {
+  IDLE
+  RUNNING
+  COMPLETED
+  FAILED
+}
